@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "Log.hpp"
 #include "Game.hpp"
+#include "Systems.h"
+#include "Components.h"
 
 bool Game::init()
 {
@@ -13,19 +15,31 @@ bool Game::init()
     shapeRenderer = std::make_shared<ShapeRendering::ShapeRenderer>();
     shapeRenderer->init();
 
+
+    #pragma region Do some entt stuff hidden
     // Do some entt stuff
+    //entity_registry = std::make_shared<entt::registry>();
+    //auto ent1 = entity_registry->create();
+    //struct Tfm
+    //{
+    //    float x, y, z;
+    //};
+    //entity_registry->emplace<Tfm>(ent1, Tfm{});
+    #pragma endregion
+
     entity_registry = std::make_shared<entt::registry>();
+    
     auto ent1 = entity_registry->create();
-    struct Tfm
-    {
-        float x, y, z;
-    };
-    entity_registry->emplace<Tfm>(ent1, Tfm{});
+    entity_registry->emplace<TransformComponent>(ent1,
+        glm::vec3{ 0.0f },    // position
+        glm::vec3{ 0.0f },    // rotation
+        glm::vec3{ 1.0f });   // scale
+
 
     // Grass
     grassMesh = std::make_shared<eeng::RenderableMesh>();
     grassMesh->load("assets/grass/grass_trees_merged2.fbx", false);
-
+    
     // Horse
     horseMesh = std::make_shared<eeng::RenderableMesh>();
     horseMesh->load("assets/Animals/Horse.fbx", false);
@@ -104,15 +118,15 @@ void Game::update(
         time * glm::radians(50.0f), { 0, 1, 0 },
         { 0.03f, 0.03f, 0.03f });
 
-    characterWorldMatrix3 = glm_aux::TRS(
-        { 3, 0, 0 },
-        time * glm::radians(50.0f), { 0, 1, 0 },
-        { 0.03f, 0.03f, 0.03f });
+    //characterWorldMatrix3 = glm_aux::TRS(
+    //    { 3, 0, 0 },
+    //    time * glm::radians(50.0f), { 0, 1, 0 },
+    //    { 0.03f, 0.03f, 0.03f });
 
     // Intersect player view ray with AABBs of other objects 
-    glm_aux::intersect_ray_AABB(player.viewRay, character_aabb2.min, character_aabb2.max);
-    glm_aux::intersect_ray_AABB(player.viewRay, character_aabb3.min, character_aabb3.max);
-    glm_aux::intersect_ray_AABB(player.viewRay, horse_aabb.min, horse_aabb.max);
+    //glm_aux::intersect_ray_AABB(player.viewRay, character_aabb2.min, character_aabb2.max);
+    //glm_aux::intersect_ray_AABB(player.viewRay, character_aabb3.min, character_aabb3.max);
+    //glm_aux::intersect_ray_AABB(player.viewRay, horse_aabb.min, horse_aabb.max);
 
     // We can also compute a ray from the current mouse position,
     // to use for object picking and such ...
