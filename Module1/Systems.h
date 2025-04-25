@@ -13,15 +13,18 @@ namespace eeng {
     using ForwardRendererPtr = std::shared_ptr<ForwardRenderer>;
 }
 
+
+
 // PlayerControllerSystem
 inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input) {
     using Key = eeng::InputManager::Key;
 
-    auto view = registry.view<TransformComponent, LinearVelocityComponent, PlayerControllerComponent>();
+    auto view = registry.view<TransformComponent, LinearVelocityComponent, PlayerControllerComponent, AnimeComponent>();
     for (auto entity : view) {
         auto& tfm = view.get<TransformComponent>(entity);
         auto& velocity = view.get<LinearVelocityComponent>(entity);
         auto& controller = view.get<PlayerControllerComponent>(entity);
+		auto& anim = view.get<AnimeComponent>(entity);
 
         glm::vec3 forward = controller.fwd;
         glm::vec3 right = glm::cross(forward, glm::vec3(0, 1, 0));
@@ -34,13 +37,15 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
         if (input->IsKeyPressed(Key::A)) moveDir -= right;
 
         if (glm::length(moveDir) > 0.0f) {
+
             moveDir = glm::normalize(moveDir);
             velocity.velocity = moveDir * controller.speed;
-
             tfm.rotation = glm::quatLookAtRH(-moveDir, glm::vec3(0, 1, 0));
+			anim.currentState = AnimState::Walking;
         }
         else {
             velocity.velocity = glm::vec3(0.0f);
+			anim.currentState = AnimState::Idle;
         }
     }
 }
@@ -96,4 +101,17 @@ inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr rend
             renderer->renderMesh(mesh, worldMatrix);
         }
     }
+}
+
+inline void AnimateSystem(entt::registry& registry, float time) {
+	auto view = registry.view<TransformComponent, AnimeComponent>();
+	for (auto entity : view) {
+		auto& tfm = view.get<TransformComponent>(entity);
+		auto& animeComp = view.get<AnimeComponent>(entity);
+		// Update animation state based on time or other conditions
+		// For example, you can switch between Idle and Walking states based on time
+		if (time > 1.0f) {
+			animeComp.currentState = AnimState::Walking;
+		}
+	}
 }

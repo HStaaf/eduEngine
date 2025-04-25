@@ -10,6 +10,16 @@
 #include "../src/RenderableMesh.hpp"
 
 
+
+struct PlayerTag {};
+
+enum class AnimState{ Idle, Walking, Jumping };
+
+struct AnimeComponent{
+    AnimState currentState = AnimState::Idle;
+    float blendTimer = 0.0f;
+};
+
 struct TransformComponent {
     glm::vec3 position = glm::vec3(0.0f);
     glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);

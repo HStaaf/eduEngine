@@ -40,6 +40,7 @@ public:
 private:
     /// @brief For rendering of GUI elements
     void renderUI();
+    entt::entity playerEntity = entt::entity{};
 
     // Renderer for rendering imported animated or non-animated models
     eeng::ForwardRendererPtr forwardRenderer;

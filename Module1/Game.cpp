@@ -15,11 +15,12 @@ bool Game::init()
     shapeRenderer = std::make_shared<ShapeRendering::ShapeRenderer>();
     shapeRenderer->init();
 
+    entity_registry = std::make_shared<entt::registry>();
+    //auto ent1 = entity_registry->create();
+    //entity_registry->emplace<TransformComponent>(ent1, glm::vec3{ 0.0f }, glm::vec3{ 0.0f }, glm::vec3{ 1.0f });
 
     #pragma region Do some entt stuff hidden
     // Do some entt stuff
-    //entity_registry = std::make_shared<entt::registry>();
-    //auto ent1 = entity_registry->create();
     //struct Tfm
     //{
     //    float x, y, z;
@@ -27,15 +28,7 @@ bool Game::init()
     //entity_registry->emplace<Tfm>(ent1, Tfm{});
     #pragma endregion
 
-    entity_registry = std::make_shared<entt::registry>();
-    
-    auto ent1 = entity_registry->create();
-    entity_registry->emplace<TransformComponent>(ent1,
-        glm::vec3{ 0.0f },    // position
-        glm::vec3{ 0.0f },    // rotation
-        glm::vec3{ 1.0f });   // scale
-
-
+    #pragma region Generating meshes
     // Grass
     grassMesh = std::make_shared<eeng::RenderableMesh>();
     grassMesh->load("assets/grass/grass_trees_merged2.fbx", false);
@@ -46,6 +39,7 @@ bool Game::init()
 
     // Character
     characterMesh = std::make_shared<eeng::RenderableMesh>();
+
 #if 0
     // Character
     characterMesh->load("assets/Ultimate Platformer Pack/Character/Character.fbx", false);
@@ -81,7 +75,9 @@ bool Game::init()
     // Remove root motion
     characterMesh->removeTranslationKeys("mixamorig:Hips");
 #endif
+#pragma endregion
 
+    #pragma region generating matrices for grass and horse
     grassWorldMatrix = glm_aux::TRS(
         { 0.0f, 0.0f, 0.0f },
         0.0f, { 0, 1, 0 },
@@ -91,6 +87,23 @@ bool Game::init()
         { 30.0f, 0.0f, -35.0f },
         35.0f, { 0, 1, 0 },
         { 0.01f, 0.01f, 0.01f });
+    #pragma endregion
+
+    playerEntity = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(
+        playerEntity,
+        glm::vec3{ 0.0f, 0.0f, 0.0f },  // position
+        glm::vec3{ 0.0f, 0.0f, 0.0f },  // rotation (Euler angles or radians)
+        glm::vec3{ 0.02f, 0.02f, 0.02f }   // scale
+    );
+    entity_registry->emplace<PlayerTag>(playerEntity);
+    entity_registry->emplace<MeshComponent>(playerEntity, characterMesh);
+    entity_registry->emplace<LinearVelocityComponent>(playerEntity, glm::vec3{ 0.0f });
+	entity_registry->emplace<PlayerControllerComponent>(playerEntity, 5.0f);
+    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Idle, 0.0f);
+
+
+
 
     return true;
 }
@@ -102,7 +115,10 @@ void Game::update(
 {
     updateCamera(input);
 
-    updatePlayer(deltaTime, input);
+    //updatePlayer(deltaTime, input);
+
+    PlayerControllerSystem(*entity_registry, input);
+    MovementSystem(*entity_registry, deltaTime);
 
     pointlight.pos = glm::vec3(
         glm_aux::R(time * 0.1f, { 0.0f, 1.0f, 0.0f }) *
@@ -114,8 +130,8 @@ void Game::update(
         { 0.03f, 0.03f, 0.03f });
 
     characterWorldMatrix2 = glm_aux::TRS(
-        { -3, 0, 0 },
-        time * glm::radians(50.0f), { 0, 1, 0 },
+        { -10, 0, 0 },
+        time * glm::radians(150.0f), { 0, 1, 0 },
         { 0.03f, 0.03f, 0.03f });
 
     //characterWorldMatrix3 = glm_aux::TRS(
@@ -124,9 +140,9 @@ void Game::update(
     //    { 0.03f, 0.03f, 0.03f });
 
     // Intersect player view ray with AABBs of other objects 
-    //glm_aux::intersect_ray_AABB(player.viewRay, character_aabb2.min, character_aabb2.max);
-    //glm_aux::intersect_ray_AABB(player.viewRay, character_aabb3.min, character_aabb3.max);
-    //glm_aux::intersect_ray_AABB(player.viewRay, horse_aabb.min, horse_aabb.max);
+    glm_aux::intersect_ray_AABB(player.viewRay, character_aabb2.min, character_aabb2.max);
+    glm_aux::intersect_ray_AABB(player.viewRay, character_aabb3.min, character_aabb3.max);
+    glm_aux::intersect_ray_AABB(player.viewRay, horse_aabb.min, horse_aabb.max);
 
     // We can also compute a ray from the current mouse position,
     // to use for object picking and such ...
@@ -163,6 +179,8 @@ void Game::render(
     // Begin rendering pass
     forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
 
+    RenderSystem(*entity_registry, forwardRenderer);
+
     // Grass
     forwardRenderer->renderMesh(grassMesh, grassWorldMatrix);
     grass_aabb = grassMesh->m_model_aabb.post_transform(grassWorldMatrix);
@@ -173,23 +191,24 @@ void Game::render(
     horse_aabb = horseMesh->m_model_aabb.post_transform(horseWorldMatrix);
 
     // Character, instance 1
-    characterMesh->animate(characterAnimIndex, time * characterAnimSpeed);
+    characterMesh->animate(2, time * characterAnimSpeed);
     forwardRenderer->renderMesh(characterMesh, characterWorldMatrix1);
     character_aabb1 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix1);
 
     // Character, instance 2
-    characterMesh->animate(1, time * characterAnimSpeed);
+    characterMesh->animate(2, time * characterAnimSpeed);
     forwardRenderer->renderMesh(characterMesh, characterWorldMatrix2);
     character_aabb2 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix2);
 
     // Character, instance 3
-    characterMesh->animate(2, time * characterAnimSpeed);
-    forwardRenderer->renderMesh(characterMesh, characterWorldMatrix3);
-    character_aabb3 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix3);
+    //characterMesh->animate(2, time * characterAnimSpeed);
+    //forwardRenderer->renderMesh(characterMesh, characterWorldMatrix3);
+    //character_aabb3 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix3);
 
     // End rendering pass
     drawcallCount = forwardRenderer->endPass();
 
+    #pragma region I dont know what this is so I hide it
     // Draw player view ray
     if (player.viewRay)
     {
@@ -231,7 +250,8 @@ void Game::render(
         shapeRenderer->pop_states<glm::mat4>();
     }
 #endif
-
+#pragma endregion
+    
     // Draw shape batches
     shapeRenderer->render(matrices.P * matrices.V);
     shapeRenderer->post_render();
