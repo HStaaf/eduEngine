@@ -100,10 +100,7 @@ bool Game::init()
     entity_registry->emplace<MeshComponent>(playerEntity, characterMesh);
     entity_registry->emplace<LinearVelocityComponent>(playerEntity, glm::vec3{ 0.0f });
 	entity_registry->emplace<PlayerControllerComponent>(playerEntity, 5.0f);
-    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Idle, 0.0f);
-
-
-
+    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Idle, AnimState::Idle, 0.0f);
 
     return true;
 }
@@ -178,7 +175,7 @@ void Game::render(
 
     // Begin rendering pass
     forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
-
+	AnimateSystem(*entity_registry, time, characterAnimSpeed);
     RenderSystem(*entity_registry, forwardRenderer);
 
     // Grass

@@ -16,7 +16,8 @@ struct PlayerTag {};
 enum class AnimState{ Idle, Walking, Jumping };
 
 struct AnimeComponent{
-    AnimState currentState = AnimState::Idle;
+    AnimState previousState = AnimState::Idle;
+    AnimState currentState  = AnimState::Idle;
     float blendTimer = 0.0f;
 };
 

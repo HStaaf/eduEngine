@@ -15,6 +15,8 @@ namespace eeng {
 
 
 
+
+
 // PlayerControllerSystem
 inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input) {
     using Key = eeng::InputManager::Key;
@@ -46,6 +48,7 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
         else {
             velocity.velocity = glm::vec3(0.0f);
 			anim.currentState = AnimState::Idle;
+
         }
     }
 }
@@ -103,15 +106,17 @@ inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr rend
     }
 }
 
-inline void AnimateSystem(entt::registry& registry, float time) {
-	auto view = registry.view<TransformComponent, AnimeComponent>();
+inline void AnimateSystem(entt::registry& registry, float time, float characterAnimSpeed) {
+	auto view = registry.view<TransformComponent, AnimeComponent, MeshComponent>();
 	for (auto entity : view) {
 		auto& tfm = view.get<TransformComponent>(entity);
 		auto& animeComp = view.get<AnimeComponent>(entity);
-		// Update animation state based on time or other conditions
-		// For example, you can switch between Idle and Walking states based on time
-		if (time > 1.0f) {
-			animeComp.currentState = AnimState::Walking;
-		}
+		auto& meshComp = view.get<MeshComponent>(entity);
+
+
+		auto mesh = meshComp.mesh.lock();
+
+        mesh->animate(static_cast<int>(animeComp.currentState)+1, time * characterAnimSpeed);
+
 	}
 }
