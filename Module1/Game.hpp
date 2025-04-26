@@ -41,7 +41,7 @@ private:
     /// @brief For rendering of GUI elements
     void renderUI();
     entt::entity playerEntity = entt::entity{};
-
+	float elapsedTime = 0.0f;
     // Renderer for rendering imported animated or non-animated models
     eeng::ForwardRendererPtr forwardRenderer;
 

@@ -61,6 +61,7 @@ bool Game::init()
     characterMesh->load("assets/Amy/Ch46_nonPBR.fbx");
     characterMesh->load("assets/Amy/idle.fbx", true);
     characterMesh->load("assets/Amy/walking.fbx", true);
+    //characterMesh->load("assets/Amy/jumping.fbx", true);
     // Remove root motion
     characterMesh->removeTranslationKeys("mixamorig:Hips");
 #endif
@@ -100,7 +101,7 @@ bool Game::init()
     entity_registry->emplace<MeshComponent>(playerEntity, characterMesh);
     entity_registry->emplace<LinearVelocityComponent>(playerEntity, glm::vec3{ 0.0f });
 	entity_registry->emplace<PlayerControllerComponent>(playerEntity, 5.0f);
-    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Idle, AnimState::Idle, 0.0f);
+    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Idle, AnimState::Idle, 0.0f, true);
 
     return true;
 }
@@ -110,12 +111,15 @@ void Game::update(
     float deltaTime,
     InputManagerPtr input)
 {
+	elapsedTime += time;
+
     updateCamera(input);
 
     //updatePlayer(deltaTime, input);
 
     PlayerControllerSystem(*entity_registry, input);
     MovementSystem(*entity_registry, deltaTime);
+    AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
 
     pointlight.pos = glm::vec3(
         glm_aux::R(time * 0.1f, { 0.0f, 1.0f, 0.0f }) *
@@ -175,7 +179,7 @@ void Game::render(
 
     // Begin rendering pass
     forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
-	AnimateSystem(*entity_registry, time, characterAnimSpeed);
+
     RenderSystem(*entity_registry, forwardRenderer);
 
     // Grass

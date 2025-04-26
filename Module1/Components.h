@@ -13,22 +13,25 @@
 
 struct PlayerTag {};
 
-enum class AnimState{ Idle, Walking, Jumping };
+enum AnimState:uint8_t{ Idle = 1, Walking = 2, Jumping = 3 };
 
 struct AnimeComponent{
     AnimState previousState = AnimState::Idle;
     AnimState currentState  = AnimState::Idle;
     float blendTimer = 0.0f;
+    bool isGrounded = true;
 };
 
 struct TransformComponent {
     glm::vec3 position = glm::vec3(0.0f);
     glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
+
 };
 
 struct LinearVelocityComponent {
     glm::vec3 velocity = glm::vec3(0.0f);
+	float gravity = -9.81f;
 };
 
 struct MeshComponent {
@@ -39,6 +42,7 @@ struct PlayerControllerComponent {
     float speed = 5.0f;
     glm::vec3 fwd = glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 right = glm::vec3(1.0f, 0.0f, 0.0f);
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 };
 
 struct NPCWaypointComponent {

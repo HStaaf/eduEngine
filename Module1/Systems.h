@@ -14,9 +14,6 @@ namespace eeng {
 }
 
 
-
-
-
 // PlayerControllerSystem
 inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input) {
     using Key = eeng::InputManager::Key;
@@ -28,15 +25,17 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
         auto& controller = view.get<PlayerControllerComponent>(entity);
 		auto& anim = view.get<AnimeComponent>(entity);
 
-        glm::vec3 forward = controller.fwd;
-        glm::vec3 right = glm::cross(forward, glm::vec3(0, 1, 0));
-        controller.right = right;
+        //glm::vec3 forward = controller.fwd;
+        //glm::vec3 right = glm::cross(forward, glm::vec3(0, 1, 0));
+        //controller.right = right;
+    
+        if (!anim.isGrounded) return;
 
         glm::vec3 moveDir(0.0f);
-        if (input->IsKeyPressed(Key::W)) moveDir += forward;
-        if (input->IsKeyPressed(Key::S)) moveDir -= forward;
-        if (input->IsKeyPressed(Key::D)) moveDir += right;
-        if (input->IsKeyPressed(Key::A)) moveDir -= right;
+        if (input->IsKeyPressed(Key::W))     moveDir += controller.fwd;
+        if (input->IsKeyPressed(Key::S))     moveDir -= controller.fwd;
+        if (input->IsKeyPressed(Key::D))     moveDir += controller.right;
+        if (input->IsKeyPressed(Key::A))     moveDir -= controller.right;
 
         if (glm::length(moveDir) > 0.0f) {
 
@@ -50,16 +49,33 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
 			anim.currentState = AnimState::Idle;
 
         }
+
+        if (input->IsKeyPressed(Key::Space)) {
+            anim.isGrounded = false;
+            velocity.velocity.y = 1.0f;
+        }
     }
 }
 
 // MovementSystem 
 inline void MovementSystem(entt::registry& registry, float deltaTime) {
-    auto view = registry.view<TransformComponent, LinearVelocityComponent>();
+    auto view = registry.view<TransformComponent, LinearVelocityComponent, AnimeComponent>();
     for (auto entity : view) {
         auto& transform = view.get<TransformComponent>(entity);
         auto& velocity = view.get<LinearVelocityComponent>(entity);
+        auto& anime = view.get<AnimeComponent>(entity);
         transform.position += velocity.velocity * deltaTime;
+
+		if (!anime.isGrounded) {
+			velocity.velocity.y  += velocity.gravity * deltaTime;
+			transform.position.y += velocity.velocity.y;
+
+            if (transform.position.y < 0.0f) {
+				transform.position.y = 0.0f;
+				velocity.velocity.y = 0.0f;
+				anime.isGrounded = true;
+			}
+		}
     }
 }
 
@@ -106,17 +122,40 @@ inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr rend
     }
 }
 
-inline void AnimateSystem(entt::registry& registry, float time, float characterAnimSpeed) {
-	auto view = registry.view<TransformComponent, AnimeComponent, MeshComponent>();
-	for (auto entity : view) {
-		auto& tfm = view.get<TransformComponent>(entity);
-		auto& animeComp = view.get<AnimeComponent>(entity);
-		auto& meshComp = view.get<MeshComponent>(entity);
+inline void AnimateSystem(entt::registry& registry, float deltaTime, float totalElapsedTime, float characterAnimSpeed) {
+    
+    auto view = registry.view<TransformComponent, AnimeComponent, MeshComponent>();
+
+    for (auto entity : view) {
+        auto& tfm = view.get<TransformComponent>(entity);
+        auto& animeComp = view.get<AnimeComponent>(entity);
+        auto& meshComp = view.get<MeshComponent>(entity);
+
+        auto mesh = meshComp.mesh.lock();
+
+        if (animeComp.currentState != animeComp.previousState && animeComp.blendTimer < 1.0f) {
+            animeComp.blendTimer += deltaTime;
+            float blendFactor = glm::clamp(animeComp.blendTimer / 0.5f, 0.0f, 1.0f);
+
+            mesh->animateBlend(
+                animeComp.previousState,
+                animeComp.currentState,
+                totalElapsedTime,
+                totalElapsedTime,
+                blendFactor
+            );
 
 
-		auto mesh = meshComp.mesh.lock();
-
-        mesh->animate(static_cast<int>(animeComp.currentState)+1, time * characterAnimSpeed);
-
-	}
+            if (animeComp.blendTimer >= 1.0f) {
+                animeComp.blendTimer = 0.0f;
+                animeComp.previousState = animeComp.currentState;
+            }
+        }
+        else {
+            mesh->animate(animeComp.currentState, totalElapsedTime * characterAnimSpeed);
+        }
+    }
 }
+
+
+
