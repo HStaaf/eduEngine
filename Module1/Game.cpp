@@ -61,7 +61,7 @@ bool Game::init()
     characterMesh->load("assets/Amy/Ch46_nonPBR.fbx");
     characterMesh->load("assets/Amy/idle.fbx", true);
     characterMesh->load("assets/Amy/walking.fbx", true);
-    //characterMesh->load("assets/Amy/jumping.fbx", true);
+    characterMesh->load("assets/Amy/jump.fbx", true);
     // Remove root motion
     characterMesh->removeTranslationKeys("mixamorig:Hips");
 #endif
@@ -101,7 +101,7 @@ bool Game::init()
     entity_registry->emplace<MeshComponent>(playerEntity, characterMesh);
     entity_registry->emplace<LinearVelocityComponent>(playerEntity, glm::vec3{ 0.0f });
 	entity_registry->emplace<PlayerControllerComponent>(playerEntity, 5.0f);
-    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Idle, AnimState::Idle, 0.0f, true);
+    entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Start, AnimState::Idle, 0.5f, 0.0f, 0.0f, true);
 
     return true;
 }
@@ -112,6 +112,7 @@ void Game::update(
     InputManagerPtr input)
 {
 	elapsedTime += time;
+    if (input->IsKeyPressed(eeng::InputManager::Key::Q)) drawSkeleton = !drawSkeleton;
 
     updateCamera(input);
 
@@ -166,6 +167,7 @@ void Game::render(
 {
     renderUI();
 
+
     matrices.windowSize = glm::ivec2(windowWidth, windowHeight);
 
     // Projection matrix
@@ -180,7 +182,7 @@ void Game::render(
     // Begin rendering pass
     forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
 
-    RenderSystem(*entity_registry, forwardRenderer);
+    RenderSystem(*entity_registry, forwardRenderer, shapeRenderer, drawSkeleton, axisLen);
 
     // Grass
     forwardRenderer->renderMesh(grassMesh, grassWorldMatrix);
@@ -253,9 +255,16 @@ void Game::render(
 #endif
 #pragma endregion
     
+
+
+
     // Draw shape batches
     shapeRenderer->render(matrices.P * matrices.V);
     shapeRenderer->post_render();
+
+
+
+
 }
 
 void Game::renderUI()
@@ -329,6 +338,17 @@ void Game::renderUI()
     }
 
     ImGui::SliderFloat("Animation speed", &characterAnimSpeed, 0.1f, 5.0f);
+    
+    if (auto anime = entity_registry->try_get<AnimeComponent>(playerEntity))
+    {
+        ImGui::Text("FSM State: %s", ToString(anime->currentState));
+        ImGui::SliderFloat("Blend Factor", &anime->blendFactor, 0.0f, 1.0f);
+    }
+    else
+    {
+        ImGui::Text("No AnimeComponent found!");
+    }
+    ImGui::Checkbox("Draw Bone Gizmos", &drawSkeleton);
 
     ImGui::End(); // end info window
 }

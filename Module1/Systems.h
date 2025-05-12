@@ -13,6 +13,36 @@ namespace eeng {
     using ForwardRendererPtr = std::shared_ptr<ForwardRenderer>;
 }
 
+inline void UpdateAnimState(AnimeComponent& anim, AnimState newState) {
+    if (anim.currentState != newState) {
+        anim.previousState = anim.currentState;
+        anim.currentState = newState;
+        anim.blendTimer = 0.0f;
+    }
+}
+
+inline void FinalizeBlend(AnimeComponent& anim) {
+    if (anim.blendTimer >= 1.0f) {
+        anim.blendTimer = 0.0f;
+        anim.previousState = anim.currentState;
+    }
+}
+
+inline void ApplyJumpPhysics(TransformComponent& tfm, LinearVelocityComponent& vel, AnimeComponent& anim, float deltaTime) {
+    if (!anim.isGrounded) {
+        anim.jumpTime += deltaTime;
+        vel.velocity.y += vel.gravity * deltaTime;  
+        tfm.position.y += vel.velocity.y * deltaTime;
+
+        if (tfm.position.y < 0.0f) {
+            tfm.position.y = 0.0f;
+            vel.velocity.y = 0.0f;
+            anim.jumpTime = 0.0f;
+            anim.isGrounded = true;
+        }
+    }
+}
+
 
 // PlayerControllerSystem
 inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input) {
@@ -25,10 +55,6 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
         auto& controller = view.get<PlayerControllerComponent>(entity);
 		auto& anim = view.get<AnimeComponent>(entity);
 
-        //glm::vec3 forward = controller.fwd;
-        //glm::vec3 right = glm::cross(forward, glm::vec3(0, 1, 0));
-        //controller.right = right;
-    
         if (!anim.isGrounded) return;
 
         glm::vec3 moveDir(0.0f);
@@ -42,17 +68,19 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
             moveDir = glm::normalize(moveDir);
             velocity.velocity = moveDir * controller.speed;
             tfm.rotation = glm::quatLookAtRH(-moveDir, glm::vec3(0, 1, 0));
-			anim.currentState = AnimState::Walking;
+
+            UpdateAnimState(anim, AnimState::Walking);
         }
         else {
             velocity.velocity = glm::vec3(0.0f);
-			anim.currentState = AnimState::Idle;
-
+            UpdateAnimState(anim, AnimState::Idle);
         }
 
         if (input->IsKeyPressed(Key::Space)) {
             anim.isGrounded = false;
-            velocity.velocity.y = 1.0f;
+            velocity.velocity.y = 5.0f;
+            UpdateAnimState(anim, AnimState::Jumping);
+
         }
     }
 }
@@ -61,21 +89,11 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
 inline void MovementSystem(entt::registry& registry, float deltaTime) {
     auto view = registry.view<TransformComponent, LinearVelocityComponent, AnimeComponent>();
     for (auto entity : view) {
-        auto& transform = view.get<TransformComponent>(entity);
-        auto& velocity = view.get<LinearVelocityComponent>(entity);
-        auto& anime = view.get<AnimeComponent>(entity);
-        transform.position += velocity.velocity * deltaTime;
-
-		if (!anime.isGrounded) {
-			velocity.velocity.y  += velocity.gravity * deltaTime;
-			transform.position.y += velocity.velocity.y;
-
-            if (transform.position.y < 0.0f) {
-				transform.position.y = 0.0f;
-				velocity.velocity.y = 0.0f;
-				anime.isGrounded = true;
-			}
-		}
+        auto& tfm   = view.get<TransformComponent>(entity);
+        auto& vel   = view.get<LinearVelocityComponent>(entity);
+        auto& anim  = view.get<AnimeComponent>(entity);
+        tfm.position += vel.velocity * deltaTime;
+        ApplyJumpPhysics(tfm, vel, anim, deltaTime);
     }
 }
 
@@ -105,7 +123,7 @@ inline void NPCControllerSystem(entt::registry& registry) {
 }
 
 // RenderSystem 
-inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr renderer) {
+inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr renderer, ShapeRendererPtr shprenderer, bool drawSkeleton, float axisLen) {
     auto view = registry.view<TransformComponent, MeshComponent>();
     for (auto entity : view) {
         auto& tfm = view.get<TransformComponent>(entity);
@@ -118,11 +136,47 @@ inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr rend
                 glm::scale(tfm.scale);
 
             renderer->renderMesh(mesh, worldMatrix);
+
+            if (drawSkeleton) {
+                for (int i = 0; i < mesh->boneMatrices.size(); ++i) {
+                    auto IBinverse = glm::inverse(mesh->m_bones[i].inversebind_tfm);
+                    glm::mat4 global = worldMatrix * mesh->boneMatrices[i] * IBinverse;
+                    glm::vec3 pos = glm::vec3(global[3]);
+
+                    glm::vec3 right = glm::vec3(global[0]); // X
+                    glm::vec3 up = glm::vec3(global[1]); // Y
+                    glm::vec3 fwd = glm::vec3(global[2]); // Z
+
+                    shprenderer->push_states(ShapeRendering::Color4u::Red);
+                    shprenderer->push_line(pos, pos + axisLen * right);
+
+                    shprenderer->push_states(ShapeRendering::Color4u::Green);
+                    shprenderer->push_line(pos, pos + axisLen * up);
+
+                    shprenderer->push_states(ShapeRendering::Color4u::Blue);
+                    shprenderer->push_line(pos, pos + axisLen * fwd);
+
+                    shprenderer->pop_states<ShapeRendering::Color4u>();
+                    shprenderer->pop_states<ShapeRendering::Color4u>();
+                    shprenderer->pop_states<ShapeRendering::Color4u>();
+                }
+            }
         }
     }
 }
 
-inline void AnimateSystem(entt::registry& registry, float deltaTime, float totalElapsedTime, float characterAnimSpeed) {
+inline const char* ToString(AnimState state) {
+    switch (state) {
+    case AnimState::Start: return "Start";
+    case AnimState::Idle: return "Idle";
+    case AnimState::Walking: return "Walking";
+    case AnimState::Jumping: return "Jumping";
+    default: return "Unknown";
+    }
+}
+
+inline void AnimateSystem(entt::registry& registry, float deltaTime, 
+    float totalElapsedTime, float characterAnimSpeed) {
     
     auto view = registry.view<TransformComponent, AnimeComponent, MeshComponent>();
 
@@ -133,29 +187,30 @@ inline void AnimateSystem(entt::registry& registry, float deltaTime, float total
 
         auto mesh = meshComp.mesh.lock();
 
-        if (animeComp.currentState != animeComp.previousState && animeComp.blendTimer < 1.0f) {
+        if (animeComp.currentState != animeComp.previousState) {
             animeComp.blendTimer += deltaTime;
-            float blendFactor = glm::clamp(animeComp.blendTimer / 0.5f, 0.0f, 1.0f);
+            float blender = glm::clamp(animeComp.blendTimer / animeComp.blendFactor, 0.0f, 1.0f);
 
             mesh->animateBlend(
                 animeComp.previousState,
                 animeComp.currentState,
-                totalElapsedTime,
-                totalElapsedTime,
-                blendFactor
+                totalElapsedTime * characterAnimSpeed,
+                totalElapsedTime * characterAnimSpeed,
+                blender
             );
 
-
-            if (animeComp.blendTimer >= 1.0f) {
-                animeComp.blendTimer = 0.0f;
-                animeComp.previousState = animeComp.currentState;
-            }
+            FinalizeBlend(animeComp);
+        }
+        else if(animeComp.currentState == animeComp.previousState){
+            mesh->animate(animeComp.currentState, totalElapsedTime * characterAnimSpeed);
         }
         else {
-            mesh->animate(animeComp.currentState, totalElapsedTime * characterAnimSpeed);
+            eeng::Log("something is wrong");
         }
     }
 }
+
+
 
 
 

@@ -13,12 +13,14 @@
 
 struct PlayerTag {};
 
-enum AnimState:uint8_t{ Idle = 1, Walking = 2, Jumping = 3 };
+enum AnimState:uint8_t{ Start = 0, Idle = 1, Walking = 2, Jumping = 3 };
 
 struct AnimeComponent{
-    AnimState previousState = AnimState::Idle;
+    AnimState previousState = AnimState::Start;
     AnimState currentState  = AnimState::Idle;
+    float blendFactor = 0.5f;
     float blendTimer = 0.0f;
+	float jumpTime = 0.0f;
     bool isGrounded = true;
 };
 
@@ -26,7 +28,6 @@ struct TransformComponent {
     glm::vec3 position = glm::vec3(0.0f);
     glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
-
 };
 
 struct LinearVelocityComponent {
@@ -52,4 +53,4 @@ struct NPCWaypointComponent {
 };
 
 
-#endif // COMPONENTS_H
+#endif 
