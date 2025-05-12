@@ -6,6 +6,8 @@
 #include "Game.hpp"
 #include "Systems.h"
 #include "Components.h"
+#include "CalorieTracker.cpp"
+
 
 bool Game::init()
 {
@@ -102,6 +104,10 @@ bool Game::init()
     entity_registry->emplace<LinearVelocityComponent>(playerEntity, glm::vec3{ 0.0f });
 	entity_registry->emplace<PlayerControllerComponent>(playerEntity, 5.0f);
     entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Start, AnimState::Idle, 0.5f, 0.0f, 0.0f, true);
+    
+    playerLogic = std::make_shared<PlayerLogic>(playerEntity);
+    calorieTracker = std::make_shared<CalorieTracker>();
+    playerLogic->AddObserver(calorieTracker.get());
 
     return true;
 }
@@ -118,7 +124,7 @@ void Game::update(
 
     //updatePlayer(deltaTime, input);
 
-    PlayerControllerSystem(*entity_registry, input);
+    PlayerControllerSystem(*entity_registry, input, playerLogic);
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
 
@@ -343,6 +349,10 @@ void Game::renderUI()
     {
         ImGui::Text("FSM State: %s", ToString(anime->currentState));
         ImGui::SliderFloat("Blend Factor", &anime->blendFactor, 0.0f, 1.0f);
+
+        if (calorieTracker) {
+            ImGui::Text("Calories burned: %.2f kcal", calorieTracker->getCalories());
+        }
     }
     else
     {

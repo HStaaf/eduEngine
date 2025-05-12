@@ -7,6 +7,8 @@
 #include "RenderableMesh.hpp"
 #include "ForwardRenderer.hpp"
 #include "ShapeRenderer.hpp"
+#include "PlayerLogic.cpp"
+#include "CalorieTracker.cpp"
 
 /// @brief A Game may hold, update and render 3D geometry and GUI elements
 class Game : public eeng::GameBase
@@ -44,6 +46,9 @@ private:
 	float elapsedTime = 0.0f;
     bool drawSkeleton = true;
     float axisLen = 25.0f;
+    std::shared_ptr<PlayerLogic> playerLogic;
+    std::shared_ptr<CalorieTracker> calorieTracker;
+
     // Renderer for rendering imported animated or non-animated models
     eeng::ForwardRendererPtr forwardRenderer;
 

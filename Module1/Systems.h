@@ -49,7 +49,7 @@ inline void ApplyJumpPhysics(TransformComponent& tfm, LinearVelocityComponent& v
 
 
 // PlayerControllerSystem
-inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input) {
+inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input, std::shared_ptr<PlayerLogic> playerLogic) {
     using Key = eeng::InputManager::Key;
 
     auto view = registry.view<TransformComponent, LinearVelocityComponent, PlayerControllerComponent, AnimeComponent>();
@@ -74,6 +74,7 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
             tfm.rotation = glm::quatLookAtRH(-moveDir, glm::vec3(0, 1, 0));
 
             UpdateAnimState(anim, AnimState::Walking);
+            playerLogic->Walk();
         }
         else {
             velocity.velocity = glm::vec3(0.0f);
@@ -84,6 +85,7 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
             anim.isGrounded = false;
             velocity.velocity.y = 5.0f;
             UpdateAnimState(anim, AnimState::Jumping);
+            playerLogic->Jump();
 
         }
     }
