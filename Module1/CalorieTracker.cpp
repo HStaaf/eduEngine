@@ -24,5 +24,10 @@ public:
     }
 
     float getCalories() const { return totalCalories; }
+
+	void AddCalories(float calories) {
+		totalCalories += calories;
+		std::cout << "Expended " << calories << " kcal through eventsystem (Total: " << totalCalories << " kcal)\n";
+	}
 };
 

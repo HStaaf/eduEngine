@@ -49,7 +49,7 @@ inline void ApplyJumpPhysics(TransformComponent& tfm, LinearVelocityComponent& v
 
 
 // PlayerControllerSystem
-inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input, std::shared_ptr<PlayerLogic> playerLogic) {
+inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input, std::shared_ptr<PlayerLogic> playerLogic, EventQueue& eventQueue) {
     using Key = eeng::InputManager::Key;
 
     auto view = registry.view<TransformComponent, LinearVelocityComponent, PlayerControllerComponent, AnimeComponent>();
@@ -75,6 +75,8 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
 
             UpdateAnimState(anim, AnimState::Walking);
             playerLogic->Walk();
+            eventQueue.EnqueueEvent("PLAYER_WALKED");
+
         }
         else {
             velocity.velocity = glm::vec3(0.0f);
@@ -86,6 +88,7 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
             velocity.velocity.y = 5.0f;
             UpdateAnimState(anim, AnimState::Jumping);
             playerLogic->Jump();
+            eventQueue.EnqueueEvent("PLAYER_JUMPED");
 
         }
     }

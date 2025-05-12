@@ -9,6 +9,7 @@
 #include "ShapeRenderer.hpp"
 #include "PlayerLogic.cpp"
 #include "CalorieTracker.cpp"
+#include "EventQueue.h"
 
 /// @brief A Game may hold, update and render 3D geometry and GUI elements
 class Game : public eeng::GameBase
@@ -48,6 +49,7 @@ private:
     float axisLen = 25.0f;
     std::shared_ptr<PlayerLogic> playerLogic;
     std::shared_ptr<CalorieTracker> calorieTracker;
+    EventQueue eventQueue;
 
     // Renderer for rendering imported animated or non-animated models
     eeng::ForwardRendererPtr forwardRenderer;

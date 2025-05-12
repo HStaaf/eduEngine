@@ -8,7 +8,6 @@
 #include "Components.h"
 #include "CalorieTracker.cpp"
 
-
 bool Game::init()
 {
     forwardRenderer = std::make_shared<eeng::ForwardRenderer>();
@@ -109,6 +108,11 @@ bool Game::init()
     calorieTracker = std::make_shared<CalorieTracker>();
     playerLogic->AddObserver(calorieTracker.get());
 
+    eventQueue.RegisterListener([this](const std::string& e) {
+        if      (e == "PLAYER_JUMPED") calorieTracker->AddCalories(0.2f);
+        else if (e == "PLAYER_WALKED") calorieTracker->AddCalories(0.05f);
+        });
+
     return true;
 }
 
@@ -124,9 +128,10 @@ void Game::update(
 
     //updatePlayer(deltaTime, input);
 
-    PlayerControllerSystem(*entity_registry, input, playerLogic);
+    PlayerControllerSystem(*entity_registry, input, playerLogic, eventQueue);
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
+    eventQueue.BroadcastAllEvents();
 
     pointlight.pos = glm::vec3(
         glm_aux::R(time * 0.1f, { 0.0f, 1.0f, 0.0f }) *
