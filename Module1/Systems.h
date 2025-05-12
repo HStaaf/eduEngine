@@ -13,6 +13,8 @@ namespace eeng {
     using ForwardRendererPtr = std::shared_ptr<ForwardRenderer>;
 }
 
+// Refacored the code that changed states. This was previously hard coded in the 
+// playerEntity component which was way to tightly coupled.
 inline void UpdateAnimState(AnimeComponent& anim, AnimState newState) {
     if (anim.currentState != newState) {
         anim.previousState = anim.currentState;
@@ -21,6 +23,7 @@ inline void UpdateAnimState(AnimeComponent& anim, AnimState newState) {
     }
 }
 
+// Refactored by breaking off the code that checks if a blend is finalized into a single function 
 inline void FinalizeBlend(AnimeComponent& anim) {
     if (anim.blendTimer >= 1.0f) {
         anim.blendTimer = 0.0f;
@@ -28,6 +31,7 @@ inline void FinalizeBlend(AnimeComponent& anim) {
     }
 }
 
+// Refactored by moving the code which handles jumping into its own function. 
 inline void ApplyJumpPhysics(TransformComponent& tfm, LinearVelocityComponent& vel, AnimeComponent& anim, float deltaTime) {
     if (!anim.isGrounded) {
         anim.jumpTime += deltaTime;
