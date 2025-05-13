@@ -11,15 +11,26 @@
 #include "CollisionGeometry.h"
 
 
+struct PlaneColliderComponent {
+    glm::vec3 position;  
+    glm::vec3 normal;  
+
+    PlaneColliderComponent() = default;
+    PlaneColliderComponent(const glm::vec3& pos, const glm::vec3& norm)
+        : position(pos), normal(glm::normalize(norm)) {
+    }
+};
+
 struct SphereColliderComponent {
     Sphere localSphere; 
     bool isTrigger = false;
-    bool collissionTriggered = false;
+    bool sphereCollissionTriggered = false;
+	bool planeCollissionTriggered = false;
 
     SphereColliderComponent() = default;
 
-    SphereColliderComponent(const glm::vec3& offset, float radius, bool trigger = false, bool collissionTriggered = false)
-        : localSphere(offset, radius), isTrigger(trigger) {
+    SphereColliderComponent(const glm::vec3& offset, float radius, bool trigger = false, bool sphereCollissionTriggered = false, bool planeCollissionTriggered = false)
+        : localSphere(offset, radius), isTrigger(trigger), sphereCollissionTriggered(sphereCollissionTriggered), planeCollissionTriggered(planeCollissionTriggered) {
     }
 };
 

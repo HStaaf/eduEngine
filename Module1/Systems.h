@@ -237,9 +237,13 @@ inline void SphereCollisionSystem(entt::registry& registry)
 {
     auto view = registry.view<TransformComponent, SphereColliderComponent>();
 
+    for (auto entity : view) {
+        view.get<SphereColliderComponent>(entity).sphereCollissionTriggered = false;
+    }
+
     for (auto entityA : view) {
         const auto& transformA = view.get<TransformComponent>(entityA);
-        const auto& colliderA = view.get<SphereColliderComponent>(entityA);
+        auto& colliderA = view.get<SphereColliderComponent>(entityA);
         glm::vec3 centerA = transformA.position + colliderA.localSphere.center;
         float radiusA = colliderA.localSphere.radius;
 
@@ -247,19 +251,45 @@ inline void SphereCollisionSystem(entt::registry& registry)
             if (entityA == entityB) continue;
 
             const auto& transformB = view.get<TransformComponent>(entityB);
-            const auto& colliderB = view.get<SphereColliderComponent>(entityB);
+            auto& colliderB = view.get<SphereColliderComponent>(entityB);
             glm::vec3 centerB = transformB.position + colliderB.localSphere.center;
             float radiusB = colliderB.localSphere.radius;
 
             if (SphereSphereIntersection(centerA, radiusA, centerB, radiusB)) {
-                std::cout << "Collision between entity "
-                    << static_cast<uint32_t>(entityA) << " and "
-                    << static_cast<uint32_t>(entityB) << std::endl;
-
+                colliderA.sphereCollissionTriggered = true;
+                colliderB.sphereCollissionTriggered = true;
             }
         }
     }
 }
+
+inline void SpherePlaneCollisionSystem(entt::registry& registry)
+{
+    auto spheres = registry.view<TransformComponent, SphereColliderComponent>();
+    auto planes  = registry.view<PlaneColliderComponent>();
+
+    for (auto sphereEntity : spheres) {
+        auto& transform = spheres.get<TransformComponent>(sphereEntity);
+        auto& collider = spheres.get<SphereColliderComponent>(sphereEntity);
+        glm::vec3 sphereCenter = transform.position + collider.localSphere.center;
+        float sphereRadius = collider.localSphere.radius;
+
+        collider.planeCollissionTriggered = false;
+
+        for (auto planeEntity : planes) {
+            const auto& plane = planes.get<PlaneColliderComponent>(planeEntity);
+
+            float dist = glm::dot(plane.normal, sphereCenter - plane.position);
+
+            if (std::abs(dist) <= sphereRadius) {
+                collider.planeCollissionTriggered = true;
+            }
+        }
+    }
+}
+
+
+
 
 
 

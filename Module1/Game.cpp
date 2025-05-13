@@ -133,10 +133,11 @@ bool Game::init()
 
     entity_registry->emplace<SphereColliderComponent>(
         playerEntity,
-        boundingSphere.center + glm::vec3(0.0f, 1.0f, 0.0f),    // Offset from entity position
+        boundingSphere.center + glm::vec3(0.0f, -1.0f, 0.0f),    // Offset from entity position
         boundingSphere.radius,    // Radius
         true,                     // isTrigger
-		false					  // collissionTriggered
+		false,					  // collissionTriggered
+        false
     );
 
     // === Add one NPC ===
@@ -164,10 +165,25 @@ bool Game::init()
 
     entity_registry->emplace<SphereColliderComponent>(
         npcEntity,
-        boundingSphere.center + glm::vec3(0.0f, 1.0f, 0.0f),
+        boundingSphere.center + glm::vec3(0.0f, 0.1f, 0.0f),
         boundingSphere.radius,
         true,
+        false,
         false);
+
+
+    // Create ground entity with a plane collider at y = 0
+    entt::entity groundEntity = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(
+        groundEntity,
+        glm::vec3{ 0, 0, 0 },   // position
+        glm::vec3{ 0, 0, 0 },   // rotation
+        glm::vec3{ 1.0f });     // scale
+    entity_registry->emplace<PlaneColliderComponent>(
+        groundEntity,
+        glm::vec3{ 0, 0, 0 },   // a point on the plane
+        glm::vec3{ 0, 1, 0 });  // up direction (normal)
+
 
     eventQueue.RegisterListener([this](const std::string& e) {
         if      (e == "PLAYER_JUMPED") calorieTracker->AddCalories(0.2f);
@@ -193,6 +209,8 @@ void Game::update(
     NPCControllerSystem(*entity_registry);
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
+    SphereCollisionSystem(*entity_registry);
+    SpherePlaneCollisionSystem(*entity_registry);
     eventQueue.BroadcastAllEvents();
 
     pointlight.pos = glm::vec3(
@@ -286,8 +304,6 @@ void Game::render(
 
     // === Draw wireframe sphere colliders ===
     {
-        shapeRenderer->push_states(ShapeRendering::Color4u{ 0xFF00FF00 }); // Green
-
         auto view = entity_registry->view<TransformComponent, SphereColliderComponent>();
         for (auto entity : view) {
             const auto& transform = view.get<TransformComponent>(entity);
@@ -295,6 +311,11 @@ void Game::render(
 
             glm::vec3 worldCenter = transform.position + collider.localSphere.center;
             float radius = collider.localSphere.radius;
+
+            ShapeRendering::Color4u color = (collider.sphereCollissionTriggered || collider.planeCollissionTriggered)
+                ? ShapeRendering::Color4u{ 0xFF0000FF } : ShapeRendering::Color4u{ 0xFF00FF00 }; 
+
+            shapeRenderer->push_states(color);
 
             // YZ plane (circle facing X)
             shapeRenderer->push_states(glm_aux::TS(worldCenter, radius * glm::vec3(1.0f)));
@@ -312,12 +333,10 @@ void Game::render(
                 glm::rotate(glm::radians(90.0f), glm::vec3(0, 1, 0)));
             shapeRenderer->push_circle_ring<32>();
             shapeRenderer->pop_states<glm::mat4>();
+
+            shapeRenderer->pop_states<ShapeRendering::Color4u>();
         }
-
-        shapeRenderer->pop_states<ShapeRendering::Color4u>();
     }
-
-
 
     #pragma region I dont know what this is so I hide it
     // Draw player view ray
