@@ -8,8 +8,20 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include "../src/RenderableMesh.hpp"
+#include "CollisionGeometry.h"
 
 
+struct SphereColliderComponent {
+    Sphere localSphere; 
+    bool isTrigger = false;
+    bool collissionTriggered = false;
+
+    SphereColliderComponent() = default;
+
+    SphereColliderComponent(const glm::vec3& offset, float radius, bool trigger = false, bool collissionTriggered = false)
+        : localSphere(offset, radius), isTrigger(trigger) {
+    }
+};
 
 struct PlayerTag {};
 

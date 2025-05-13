@@ -52,7 +52,10 @@ inline void ApplyJumpPhysics(TransformComponent& tfm, LinearVelocityComponent& v
 inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr input, std::shared_ptr<PlayerLogic> playerLogic, EventQueue& eventQueue) {
     using Key = eeng::InputManager::Key;
 
-    auto view = registry.view<TransformComponent, LinearVelocityComponent, PlayerControllerComponent, AnimeComponent>();
+    auto view = registry.view<TransformComponent, LinearVelocityComponent, PlayerControllerComponent, AnimeComponent, PlayerTag>();
+
+	if (!view) return;
+
     for (auto entity : view) {
         auto& tfm = view.get<TransformComponent>(entity);
         auto& velocity = view.get<LinearVelocityComponent>(entity);
@@ -109,11 +112,12 @@ inline void MovementSystem(entt::registry& registry, float deltaTime) {
 // NPCControllerSystem 
 inline void NPCControllerSystem(entt::registry& registry) {
     constexpr float proximityThresholdSq = 0.1f;
-    auto view = registry.view<TransformComponent, NPCWaypointComponent, LinearVelocityComponent>();
+    auto view = registry.view<TransformComponent, NPCWaypointComponent, LinearVelocityComponent, AnimeComponent>();
     for (auto entity : view) {
         auto& tfm = view.get<TransformComponent>(entity);
         auto& npc = view.get<NPCWaypointComponent>(entity);
         auto& vel = view.get<LinearVelocityComponent>(entity);
+        auto& anim = view.get<AnimeComponent>(entity);
 
         if (npc.waypoints.empty()) {
             vel.velocity = glm::vec3(0.0f);
@@ -124,9 +128,11 @@ inline void NPCControllerSystem(entt::registry& registry) {
         if (glm::length2(dir) < proximityThresholdSq) {
             npc.currentWaypointIndex = (npc.currentWaypointIndex + 1) % npc.waypoints.size();
             vel.velocity = glm::vec3(0.0f);
+            UpdateAnimState(anim, AnimState::Idle);
         }
         else {
             vel.velocity = glm::normalize(dir) * npc.speed;
+            UpdateAnimState(anim, AnimState::Walking);
         }
     }
 }
@@ -184,6 +190,8 @@ inline const char* ToString(AnimState state) {
     }
 }
 
+
+
 inline void AnimateSystem(entt::registry& registry, float deltaTime, 
     float totalElapsedTime, float characterAnimSpeed) {
     
@@ -218,6 +226,41 @@ inline void AnimateSystem(entt::registry& registry, float deltaTime,
         }
     }
 }
+
+inline bool SphereSphereIntersection(const glm::vec3& centerA, float radiusA, const glm::vec3& centerB, float radiusB){
+    float distanceSq = glm::distance2(centerA, centerB);
+    float radiusSum = radiusA + radiusB;
+    return distanceSq <= radiusSum * radiusSum;
+}
+
+inline void SphereCollisionSystem(entt::registry& registry)
+{
+    auto view = registry.view<TransformComponent, SphereColliderComponent>();
+
+    for (auto entityA : view) {
+        const auto& transformA = view.get<TransformComponent>(entityA);
+        const auto& colliderA = view.get<SphereColliderComponent>(entityA);
+        glm::vec3 centerA = transformA.position + colliderA.localSphere.center;
+        float radiusA = colliderA.localSphere.radius;
+
+        for (auto entityB : view) {
+            if (entityA == entityB) continue;
+
+            const auto& transformB = view.get<TransformComponent>(entityB);
+            const auto& colliderB = view.get<SphereColliderComponent>(entityB);
+            glm::vec3 centerB = transformB.position + colliderB.localSphere.center;
+            float radiusB = colliderB.localSphere.radius;
+
+            if (SphereSphereIntersection(centerA, radiusA, centerB, radiusB)) {
+                std::cout << "Collision between entity "
+                    << static_cast<uint32_t>(entityA) << " and "
+                    << static_cast<uint32_t>(entityB) << std::endl;
+
+            }
+        }
+    }
+}
+
 
 
 

@@ -41,6 +41,21 @@ bool Game::init()
     // Character
     characterMesh = std::make_shared<eeng::RenderableMesh>();
 
+    playerMesh = std::make_shared<eeng::RenderableMesh>();
+    playerMesh->load("assets/Amy/Ch46_nonPBR.fbx");
+    playerMesh->load("assets/Amy/idle.fbx", true);
+    playerMesh->load("assets/Amy/walking.fbx", true);
+    playerMesh->load("assets/Amy/jump.fbx", true);
+    playerMesh->removeTranslationKeys("mixamorig:Hips");
+
+    // Load NPC mesh (fully independent)
+    npcMesh = std::make_shared<eeng::RenderableMesh>();
+    npcMesh->load("assets/Amy/Ch46_nonPBR.fbx");
+    npcMesh->load("assets/Amy/idle.fbx", true);
+    npcMesh->load("assets/Amy/walking.fbx", true);
+    npcMesh->load("assets/Amy/jump.fbx", true);
+    npcMesh->removeTranslationKeys("mixamorig:Hips");
+
 #if 0
     // Character
     characterMesh->load("assets/Ultimate Platformer Pack/Character/Character.fbx", false);
@@ -96,10 +111,10 @@ bool Game::init()
         playerEntity,
         glm::vec3{ 0.0f, 0.0f, 0.0f },  // position
         glm::vec3{ 0.0f, 0.0f, 0.0f },  // rotation (Euler angles or radians)
-        glm::vec3{ 0.02f, 0.02f, 0.02f }   // scale
+        glm::vec3{ 0.03f, 0.03f, 0.03f }   // scale
     );
     entity_registry->emplace<PlayerTag>(playerEntity);
-    entity_registry->emplace<MeshComponent>(playerEntity, characterMesh);
+    entity_registry->emplace<MeshComponent>(playerEntity, playerMesh);
     entity_registry->emplace<LinearVelocityComponent>(playerEntity, glm::vec3{ 0.0f });
 	entity_registry->emplace<PlayerControllerComponent>(playerEntity, 5.0f);
     entity_registry->emplace<AnimeComponent>(playerEntity, AnimState::Start, AnimState::Idle, 0.5f, 0.0f, 0.0f, true);
@@ -107,6 +122,52 @@ bool Game::init()
     playerLogic = std::make_shared<PlayerLogic>(playerEntity);
     calorieTracker = std::make_shared<CalorieTracker>();
     playerLogic->AddObserver(calorieTracker.get());
+
+    glm::vec3 playerBounds[] = {
+        glm::vec3(0.0f, 0.0f, 0.0f),  
+        glm::vec3(0.0f, 2.2f, 0.0f)
+    };
+
+    int numPoints = sizeof(playerBounds) / sizeof(glm::vec3);
+    Sphere boundingSphere = BuildSphereFromPoints(playerBounds, numPoints);
+
+    entity_registry->emplace<SphereColliderComponent>(
+        playerEntity,
+        boundingSphere.center + glm::vec3(0.0f, 1.0f, 0.0f),    // Offset from entity position
+        boundingSphere.radius,    // Radius
+        true,                     // isTrigger
+		false					  // collissionTriggered
+    );
+
+    // === Add one NPC ===
+    entt::entity npcEntity = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(
+        npcEntity,
+        glm::vec3{ -10.0f, 0.0f, 0.0f },
+        glm::vec3{ 0.0f, 0.0f, 0.0f },
+        glm::vec3{ 0.03f, 0.03f, 0.03f });
+    entity_registry->emplace<MeshComponent>(npcEntity, npcMesh);
+    entity_registry->emplace<AnimeComponent>(npcEntity, AnimState::Start, AnimState::Idle, 0.5f, 0.0f, 0.0f, true);
+
+    entity_registry->emplace<LinearVelocityComponent>(npcEntity, glm::vec3{ 0.0f });
+
+    // Waypoints and movement logic
+    NPCWaypointComponent npcPath;
+    npcPath.waypoints = {
+        glm::vec3{ 10.0f, 0.0f, 0.0f },
+        glm::vec3{ 10.0f, 0.0f, -10.0f },
+        glm::vec3{ 0.0f, 0.0f, 0.0f },
+    };
+    npcPath.currentWaypointIndex = 0;
+    npcPath.speed = 2.0f;
+    entity_registry->emplace<NPCWaypointComponent>(npcEntity, npcPath);
+
+    entity_registry->emplace<SphereColliderComponent>(
+        npcEntity,
+        boundingSphere.center + glm::vec3(0.0f, 1.0f, 0.0f),
+        boundingSphere.radius,
+        true,
+        false);
 
     eventQueue.RegisterListener([this](const std::string& e) {
         if      (e == "PLAYER_JUMPED") calorieTracker->AddCalories(0.2f);
@@ -129,6 +190,7 @@ void Game::update(
     //updatePlayer(deltaTime, input);
 
     PlayerControllerSystem(*entity_registry, input, playerLogic, eventQueue);
+    NPCControllerSystem(*entity_registry);
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
     eventQueue.BroadcastAllEvents();
@@ -137,15 +199,15 @@ void Game::update(
         glm_aux::R(time * 0.1f, { 0.0f, 1.0f, 0.0f }) *
         glm::vec4(100.0f, 100.0f, 100.0f, 1.0f));
 
-    characterWorldMatrix1 = glm_aux::TRS(
-        player.pos,
-        0.0f, { 0, 1, 0 },
-        { 0.03f, 0.03f, 0.03f });
+    //characterWorldMatrix1 = glm_aux::TRS(
+    //    player.pos,
+    //    0.0f, { 0, 1, 0 },
+    //    { 0.03f, 0.03f, 0.03f });
 
-    characterWorldMatrix2 = glm_aux::TRS(
-        { -10, 0, 0 },
-        time * glm::radians(150.0f), { 0, 1, 0 },
-        { 0.03f, 0.03f, 0.03f });
+    //characterWorldMatrix2 = glm_aux::TRS(
+    //    { -10, 0, 0 },
+    //    time * glm::radians(150.0f), { 0, 1, 0 },
+    //    { 0.03f, 0.03f, 0.03f });
 
     //characterWorldMatrix3 = glm_aux::TRS(
     //    { 3, 0, 0 },
@@ -194,7 +256,7 @@ void Game::render(
     forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
 
     RenderSystem(*entity_registry, forwardRenderer, shapeRenderer, drawSkeleton, axisLen);
-
+    
     // Grass
     forwardRenderer->renderMesh(grassMesh, grassWorldMatrix);
     grass_aabb = grassMesh->m_model_aabb.post_transform(grassWorldMatrix);
@@ -204,15 +266,15 @@ void Game::render(
     forwardRenderer->renderMesh(horseMesh, horseWorldMatrix);
     horse_aabb = horseMesh->m_model_aabb.post_transform(horseWorldMatrix);
 
-    // Character, instance 1
-    characterMesh->animate(2, time * characterAnimSpeed);
-    forwardRenderer->renderMesh(characterMesh, characterWorldMatrix1);
-    character_aabb1 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix1);
+    //// Character, instance 1
+    //characterMesh->animate(2, time * characterAnimSpeed);
+    //forwardRenderer->renderMesh(characterMesh, characterWorldMatrix1);
+    //character_aabb1 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix1);
 
-    // Character, instance 2
-    characterMesh->animate(2, time * characterAnimSpeed);
-    forwardRenderer->renderMesh(characterMesh, characterWorldMatrix2);
-    character_aabb2 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix2);
+    //// Character, instance 2
+    //characterMesh->animate(2, time * characterAnimSpeed);
+    //forwardRenderer->renderMesh(characterMesh, characterWorldMatrix2);
+    //character_aabb2 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix2);
 
     // Character, instance 3
     //characterMesh->animate(2, time * characterAnimSpeed);
@@ -221,6 +283,41 @@ void Game::render(
 
     // End rendering pass
     drawcallCount = forwardRenderer->endPass();
+
+    // === Draw wireframe sphere colliders ===
+    {
+        shapeRenderer->push_states(ShapeRendering::Color4u{ 0xFF00FF00 }); // Green
+
+        auto view = entity_registry->view<TransformComponent, SphereColliderComponent>();
+        for (auto entity : view) {
+            const auto& transform = view.get<TransformComponent>(entity);
+            const auto& collider = view.get<SphereColliderComponent>(entity);
+
+            glm::vec3 worldCenter = transform.position + collider.localSphere.center;
+            float radius = collider.localSphere.radius;
+
+            // YZ plane (circle facing X)
+            shapeRenderer->push_states(glm_aux::TS(worldCenter, radius * glm::vec3(1.0f)));
+            shapeRenderer->push_circle_ring<32>();
+            shapeRenderer->pop_states<glm::mat4>();
+
+            // XZ plane (circle facing Y)
+            shapeRenderer->push_states(glm_aux::TS(worldCenter, radius * glm::vec3(1.0f)) *
+                glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)));
+            shapeRenderer->push_circle_ring<32>();
+            shapeRenderer->pop_states<glm::mat4>();
+
+            // XY plane (circle facing Z)
+            shapeRenderer->push_states(glm_aux::TS(worldCenter, radius * glm::vec3(1.0f)) *
+                glm::rotate(glm::radians(90.0f), glm::vec3(0, 1, 0)));
+            shapeRenderer->push_circle_ring<32>();
+            shapeRenderer->pop_states<glm::mat4>();
+        }
+
+        shapeRenderer->pop_states<ShapeRendering::Color4u>();
+    }
+
+
 
     #pragma region I dont know what this is so I hide it
     // Draw player view ray
@@ -423,3 +520,4 @@ void Game::updatePlayer(
     camera.pos += movement;
 
 }
+

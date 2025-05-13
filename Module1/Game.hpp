@@ -107,7 +107,7 @@ private:
     } player;
 
     // Game meshes
-    std::shared_ptr<eeng::RenderableMesh> grassMesh, horseMesh, characterMesh;
+    std::shared_ptr<eeng::RenderableMesh> grassMesh, horseMesh, characterMesh, playerMesh, npcMesh;
 
     // Game entity transformations
     glm::mat4 characterWorldMatrix1, characterWorldMatrix2, characterWorldMatrix3;
