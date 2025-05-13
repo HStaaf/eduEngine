@@ -11,6 +11,27 @@
 #include "CollisionGeometry.h"
 
 
+struct AABBColliderComponent {
+    AABBBoundingBox aabb;
+    bool collissionTriggered = false; 
+    bool isTrigger = false;
+
+    AABBColliderComponent() = default;
+
+    AABBColliderComponent(const glm::vec3& center, const glm::vec3& halfWidths, bool isTrigger = false, bool collissionTriggered = false)
+        : aabb(center, halfWidths.x, halfWidths.y, halfWidths.z),
+        collissionTriggered(collissionTriggered),
+        isTrigger(isTrigger) {
+    }
+};
+
+struct FoodComponent {
+    bool isCollected = false;
+
+    FoodComponent() = default;
+    FoodComponent(bool collected) : isCollected(collected) {}
+};
+
 struct PlaneColliderComponent {
     glm::vec3 position;  
     glm::vec3 normal;  
@@ -26,7 +47,6 @@ struct SphereColliderComponent {
     bool isTrigger = false;
     bool sphereCollissionTriggered = false;
 	bool planeCollissionTriggered = false;
-
     SphereColliderComponent() = default;
 
     SphereColliderComponent(const glm::vec3& offset, float radius, bool trigger = false, bool sphereCollissionTriggered = false, bool planeCollissionTriggered = false)

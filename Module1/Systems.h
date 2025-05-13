@@ -8,6 +8,9 @@
 #include <glm/gtx/norm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
+#include "ShapeRenderer.hpp"
+
+extern std::vector<Sphere*> allSpheres;
 
 namespace eeng {
     using ForwardRendererPtr = std::shared_ptr<ForwardRenderer>;
@@ -190,8 +193,6 @@ inline const char* ToString(AnimState state) {
     }
 }
 
-
-
 inline void AnimateSystem(entt::registry& registry, float deltaTime, 
     float totalElapsedTime, float characterAnimSpeed) {
     
@@ -288,6 +289,267 @@ inline void SpherePlaneCollisionSystem(entt::registry& registry)
     }
 }
 
+inline bool TestAABBAABB(const AABBBoundingBox& a, const AABBBoundingBox& b)
+{
+    float centerDiff = std::abs(a.center[0] - b.center[0]);
+    float compoundedWidth = a.halfWidths[0] + b.halfWidths[0];
+    if (centerDiff > compoundedWidth)
+        return false;
+
+    centerDiff = std::abs(a.center[1] - b.center[1]);
+    compoundedWidth = a.halfWidths[1] + b.halfWidths[1];
+    if (centerDiff > compoundedWidth)
+        return false;
+
+    centerDiff = std::abs(a.center[2] - b.center[2]);
+    compoundedWidth = a.halfWidths[2] + b.halfWidths[2];
+    if (centerDiff > compoundedWidth)
+        return false;
+
+    return true;
+}
+
+inline void AABBCollisionSystem(entt::registry& registry) {
+    auto view = registry.view<TransformComponent, AABBColliderComponent>();
+
+    // Reset all triggers first
+    for (auto entity : view) {
+        registry.get<AABBColliderComponent>(entity).collissionTriggered = false;
+    }
+
+    for (auto entityA : view) {
+        auto& aTransform = registry.get<TransformComponent>(entityA);
+        auto& aCollider = registry.get<AABBColliderComponent>(entityA);
+
+        for (auto entityB : view) {
+            if (entityA == entityB) continue;
+
+            auto& bTransform = registry.get<TransformComponent>(entityB);
+            auto& bCollider = registry.get<AABBColliderComponent>(entityB);
+
+            AABBBoundingBox a = aCollider.aabb;
+            AABBBoundingBox b = bCollider.aabb;
+
+            // Optional: apply transform.position to center
+            a.center += aTransform.position;
+            b.center += bTransform.position;
+
+            if (TestAABBAABB(a, b)) {
+                aCollider.collissionTriggered = true;
+                bCollider.collissionTriggered = true;
+            }
+        }
+    }
+}
+
+inline bool TestAABBPlane(const AABBBoundingBox& aabb, const glm::vec3& planePoint, const glm::vec3& planeNormal)
+{
+    float r =
+        aabb.halfWidths[0] * std::abs(glm::dot(glm::vec3(1, 0, 0), planeNormal)) +
+        aabb.halfWidths[1] * std::abs(glm::dot(glm::vec3(0, 1, 0), planeNormal)) +
+        aabb.halfWidths[2] * std::abs(glm::dot(glm::vec3(0, 0, 1), planeNormal));
+
+    float s = glm::dot(planeNormal, aabb.center - planePoint);
+
+    return std::abs(s) <= r;
+}
+
+inline void AABBPlaneCollisionSystem(entt::registry& registry) {
+    auto aabbs = registry.view<TransformComponent, AABBColliderComponent>();
+    auto planes = registry.view<PlaneColliderComponent>();
+
+    for (auto entity : aabbs) {
+        auto& tfm = registry.get<TransformComponent>(entity);
+        auto& collider = registry.get<AABBColliderComponent>(entity);
+
+        AABBBoundingBox aabb = collider.aabb;
+        aabb.center += tfm.position;
+
+        for (auto planeEntity : planes) {
+            const auto& plane = registry.get<PlaneColliderComponent>(planeEntity);
+            if (TestAABBPlane(aabb, plane.position, plane.normal)) {
+                collider.collissionTriggered = true;
+            }
+        }
+    }
+}
+
+
+
+
+
+float DistanceBetweenSpheres(Sphere* leftSphere, Sphere* rightSphere) {
+    float centerDistance = glm::distance(leftSphere->center, rightSphere->center);
+    float surfaceDistance = centerDistance - (leftSphere->radius + rightSphere->radius);
+    return std::max(0.0f, surfaceDistance);
+}
+
+void FindMinMaxPoints(const glm::vec3 leftCenter, const glm::vec3 rightCenter, const float leftRadius,
+    const float rightRadius, glm::vec3& minOut, glm::vec3& maxOut) {
+    minOut.x = std::min(leftCenter.x - leftRadius, rightCenter.x - rightRadius);
+    maxOut.x = std::max(leftCenter.x + leftRadius, rightCenter.x + rightRadius);
+
+    minOut.y = std::min(leftCenter.y - leftRadius, rightCenter.y - rightRadius);
+    maxOut.y = std::max(leftCenter.y + leftRadius, rightCenter.y + rightRadius);
+
+    minOut.z = std::min(leftCenter.z - leftRadius, rightCenter.z - rightRadius);
+    maxOut.z = std::max(leftCenter.z + leftRadius, rightCenter.z + rightRadius);
+}
+
+struct SphereNode {
+    Sphere* collisionRepresentation;
+    SphereNode* leftChild;
+    SphereNode* rightChild;
+};
+
+SphereNode* BuildNodeFromSingleSphere(Sphere* sphere) {
+    return new SphereNode{ sphere, nullptr, nullptr };
+}
+
+SphereNode* BuildNodeFromSpheres(Sphere* leftSphere, Sphere* rightSphere) {
+    glm::vec3 minPoint, maxPoint;
+    FindMinMaxPoints(leftSphere->center, rightSphere->center, leftSphere->radius,
+        rightSphere->radius, minPoint, maxPoint);
+
+    glm::vec3 midPoint = minPoint + (maxPoint - minPoint) * 0.5f;
+    float radius = glm::distance(maxPoint, minPoint) * 0.5f;
+
+    return new SphereNode{ new Sphere{ midPoint, radius }, nullptr, nullptr };
+}
+
+
+std::vector<std::pair<SphereNode*, SphereNode*>> FindPairs(std::vector<SphereNode*> openList,
+    float maxDistance) {
+    std::vector<std::pair<SphereNode*, SphereNode*>> allPairs;
+    std::vector<SphereNode*> availableSpheres = openList;
+
+    while (!availableSpheres.empty()) {
+        SphereNode* current = availableSpheres.back();
+        availableSpheres.pop_back();
+
+        float closestDistance = maxDistance;
+        SphereNode* bestMatch = nullptr;
+        int bestIndex = -1;
+
+        for (int j = 0; j < availableSpheres.size(); ++j) {
+            float distance = DistanceBetweenSpheres(current->collisionRepresentation,
+                availableSpheres[j]->collisionRepresentation);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                bestMatch = availableSpheres[j];
+                bestIndex = j;
+            }
+        }
+
+        if (bestMatch) {
+            availableSpheres.erase(availableSpheres.begin() + bestIndex);
+        }
+
+        allPairs.push_back({ current, bestMatch });
+    }
+
+    return allPairs;
+}
+
+SphereNode* BuildBVHBottomUp(std::vector<Sphere*> spheres, float maxDistanceBetweenLeaves) {
+    std::vector<SphereNode*> openList;
+    for (Sphere* sphere : spheres) {
+        openList.push_back(BuildNodeFromSingleSphere(sphere));
+    }
+
+    while (openList.size() != 1) {
+        auto pairs = FindPairs(openList, maxDistanceBetweenLeaves);
+        openList.clear();
+
+        for (auto pair : pairs) {
+            if (pair.second) {
+                auto node = BuildNodeFromSpheres(
+                    pair.first->collisionRepresentation, pair.second->collisionRepresentation
+                );
+                node->leftChild = pair.first;
+                node->rightChild = pair.second;
+                openList.push_back(node);
+            }
+            else {
+                auto node = BuildNodeFromSingleSphere(pair.first->collisionRepresentation);
+                node->leftChild = pair.first;
+                openList.push_back(node);
+            }
+        }
+
+        maxDistanceBetweenLeaves = std::numeric_limits<float>::max();
+    }
+
+    return openList[0];
+}
+
+std::vector<Sphere*> FindPossibleCollisions(SphereNode* treeRoot, Sphere* sphere) {
+    std::vector<Sphere*> possibleCollisions;
+
+    if (!sphere || !treeRoot)
+        return possibleCollisions;
+
+    if (!SphereSphereIntersection(treeRoot->collisionRepresentation->center, treeRoot->collisionRepresentation->radius, sphere->center, sphere->radius))
+        return possibleCollisions;
+
+    if (!treeRoot->leftChild && !treeRoot->rightChild) {
+        possibleCollisions.push_back(treeRoot->collisionRepresentation);
+        return possibleCollisions;
+    }
+
+    auto collisions = FindPossibleCollisions(treeRoot->leftChild, sphere);
+    possibleCollisions.insert(possibleCollisions.end(), collisions.begin(), collisions.end());
+
+    collisions = FindPossibleCollisions(treeRoot->rightChild, sphere);
+    possibleCollisions.insert(possibleCollisions.end(), collisions.begin(), collisions.end());
+
+    return possibleCollisions;
+}
+
+
+inline void BVHCollisionSystem(entt::registry& registry) {
+    allSpheres.clear();
+
+    // Collect all sphere colliders
+    auto view = registry.view<TransformComponent, SphereColliderComponent>();
+    for (auto entity : view) {
+        auto& tfm = registry.get<TransformComponent>(entity);
+        auto& col = registry.get<SphereColliderComponent>(entity);
+
+        glm::vec3 worldCenter = tfm.position + col.localSphere.center;
+        float worldRadius = col.localSphere.radius;
+
+        // Create world-space version
+        col.localSphere.center = worldCenter;
+        col.localSphere.owner = entity;
+
+        allSpheres.push_back(&col.localSphere);
+
+        // Reset flags
+        col.sphereCollissionTriggered = false;
+    }
+
+    if (allSpheres.empty())
+        return;
+
+    // Build BVH
+    SphereNode* root = BuildBVHBottomUp(allSpheres, 3.0f);
+
+    // Query each sphere against the BVH
+    for (Sphere* s : allSpheres) {
+        std::vector<Sphere*> candidates = FindPossibleCollisions(root, s);
+
+        for (Sphere* other : candidates) {
+            if (s == other) continue;
+            if (SphereSphereIntersection(s->center, s->radius, other->center, other->radius)) {
+                auto& a = registry.get<SphereColliderComponent>(s->owner);
+                auto& b = registry.get<SphereColliderComponent>(other->owner);
+                a.sphereCollissionTriggered = true;
+                b.sphereCollissionTriggered = true;
+            }
+        }
+    }
+}
 
 
 

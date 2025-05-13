@@ -1,20 +1,34 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <vector>
+#include <glm/glm.hpp>
+
+struct AABBBoundingBox {
+    glm::vec3 center;
+    float halfWidths[3];
+
+    AABBBoundingBox() = default;
+
+    AABBBoundingBox(const glm::vec3& c, float hwX, float hwY, float hwZ)
+        : center(c) {
+        halfWidths[0] = hwX;
+        halfWidths[1] = hwY;
+        halfWidths[2] = hwZ;
+    }
+};
 
 struct Sphere {
     glm::vec3 center; 
     float radius;
-
+	entt::entity owner = entt::null;
     Sphere() = default;
-    Sphere(const glm::vec3& c, float r) : center(c), radius(r) {}
+    Sphere(const glm::vec3& c, float r, entt::entity o = entt::null) : center(c), radius(r), owner(o) {}
 };
 
-#pragma once
-#include <vector>
-#include <glm/glm.hpp>
 
-// Simple struct to hold two indices (e.g., min and max)
+
+
 struct Vector2Int {
     int x = 0;
     int y = 0;
@@ -65,18 +79,25 @@ Vector2Int FindMostDistantPoints(const std::vector<Vector2Int>& minMaxPoints, co
 }
 
 
-Sphere BuildSphereFromPoints(const glm::vec3 points[], int numPoints) {
+Sphere BuildSphereFromPoints(const glm::vec3 points[], int numPoints, entt::entity owner = entt::null) {
     auto minMaxVectors = FindMinMaxValues(points, numPoints);
     Vector2Int mostDistantPoints = FindMostDistantPoints(minMaxVectors, points);
 
     glm::vec3 p1 = points[mostDistantPoints.x];
     glm::vec3 p2 = points[mostDistantPoints.y];
 
-    Sphere s;
-    s.center = 0.5f * (p1 + p2);
-    glm::vec3 diff = p2 - s.center;
-    s.radius = glm::length(diff);
+    glm::vec3 center = 0.5f * (p1 + p2);
+    float radius = glm::length(p2 - center);
 
-    return s;
+    return Sphere(center, radius, owner);
 }
 
+
+AABBBoundingBox BuildAABBFromSphere(const Sphere& s)
+{
+    AABBBoundingBox aabb;
+    aabb.center = s.center;
+    for (int i = 0; i < 3; ++i)
+        aabb.halfWidths[i] = s.radius;
+    return aabb;
+}

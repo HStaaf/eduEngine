@@ -7,9 +7,13 @@
 #include "Systems.h"
 #include "Components.h"
 #include "CalorieTracker.cpp"
+#include "Systems.h"
+
+std::vector<Sphere*> allSpheres;
 
 bool Game::init()
 {
+
     forwardRenderer = std::make_shared<eeng::ForwardRenderer>();
     forwardRenderer->init("shaders/phong_vert.glsl", "shaders/phong_frag.glsl");
 
@@ -106,6 +110,9 @@ bool Game::init()
         { 0.01f, 0.01f, 0.01f });
     #pragma endregion
 
+
+
+
     playerEntity = entity_registry->create();
     entity_registry->emplace<TransformComponent>(
         playerEntity,
@@ -129,16 +136,21 @@ bool Game::init()
     };
 
     int numPoints = sizeof(playerBounds) / sizeof(glm::vec3);
-    Sphere boundingSphere = BuildSphereFromPoints(playerBounds, numPoints);
+    Sphere boundingSpherePlayer = BuildSphereFromPoints(playerBounds, numPoints, playerEntity);
+
 
     entity_registry->emplace<SphereColliderComponent>(
         playerEntity,
-        boundingSphere.center + glm::vec3(0.0f, -1.0f, 0.0f),    // Offset from entity position
-        boundingSphere.radius,    // Radius
+        boundingSpherePlayer.center + glm::vec3(0.0f, 1.0f, 0.0f),    // Offset from entity position
+        boundingSpherePlayer.radius,    // Radius
         true,                     // isTrigger
 		false,					  // collissionTriggered
         false
     );
+
+    AABBBoundingBox aabb = BuildAABBFromSphere(boundingSpherePlayer);
+    glm::vec3 halfWidthsVec(aabb.halfWidths[0], aabb.halfWidths[1], aabb.halfWidths[2]);
+    entity_registry->emplace<AABBColliderComponent>(playerEntity, aabb.center, halfWidthsVec, true, false);
 
     // === Add one NPC ===
     entt::entity npcEntity = entity_registry->create();
@@ -162,11 +174,11 @@ bool Game::init()
     npcPath.currentWaypointIndex = 0;
     npcPath.speed = 2.0f;
     entity_registry->emplace<NPCWaypointComponent>(npcEntity, npcPath);
-
+    Sphere boundingSphereNPC = BuildSphereFromPoints(playerBounds, numPoints, npcEntity);
     entity_registry->emplace<SphereColliderComponent>(
         npcEntity,
-        boundingSphere.center + glm::vec3(0.0f, 0.1f, 0.0f),
-        boundingSphere.radius,
+        boundingSphereNPC.center + glm::vec3(0.0f, 0.1f, 0.0f),
+        boundingSphereNPC.radius,
         true,
         false,
         false);
@@ -183,6 +195,33 @@ bool Game::init()
         groundEntity,
         glm::vec3{ 0, 0, 0 },   // a point on the plane
         glm::vec3{ 0, 1, 0 });  // up direction (normal)
+
+
+
+
+    //Create food 
+    entt::entity foodEntity = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(
+        foodEntity,
+        glm::vec3{ 3.0f, 0.0f, 0.0f },  
+        glm::vec3{ 0.0f },
+        glm::vec3{ 1.0f }
+    );
+    entity_registry->emplace<FoodComponent>(foodEntity, false);
+
+    // Build AABB for the food
+    glm::vec3 foodCenter = glm::vec3{ 3.0f, 0.5f, 0.0f };
+    float hw = 0.3f;
+    AABBBoundingBox foodAABB(foodCenter, hw, hw, hw);
+
+    entity_registry->emplace<AABBColliderComponent>(
+        foodEntity,
+        foodAABB.center,
+        glm::vec3(foodAABB.halfWidths[0], foodAABB.halfWidths[1], foodAABB.halfWidths[2]),
+        false,
+        false
+    );
+
 
 
     eventQueue.RegisterListener([this](const std::string& e) {
@@ -210,7 +249,10 @@ void Game::update(
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
     SphereCollisionSystem(*entity_registry);
+    //BVHCollisionSystem(*entity_registry);
     SpherePlaneCollisionSystem(*entity_registry);
+    AABBCollisionSystem(*entity_registry);
+    AABBPlaneCollisionSystem(*entity_registry);
     eventQueue.BroadcastAllEvents();
 
     pointlight.pos = glm::vec3(
@@ -334,6 +376,29 @@ void Game::render(
             shapeRenderer->push_circle_ring<32>();
             shapeRenderer->pop_states<glm::mat4>();
 
+            shapeRenderer->pop_states<ShapeRendering::Color4u>();
+        }
+    }
+
+    // === Draw wireframe AABB colliders ===
+    {
+        auto view = entity_registry->view<TransformComponent, AABBColliderComponent>();
+        for (auto entity : view) {
+            const auto& transform = view.get<TransformComponent>(entity);
+            const auto& aabbComp = view.get<AABBColliderComponent>(entity);
+            const auto& aabb = aabbComp.aabb;
+
+            glm::vec3 centerWorld = transform.position + aabb.center;
+            glm::vec3 half = glm::vec3(aabb.halfWidths[0], aabb.halfWidths[1], aabb.halfWidths[2]);
+            glm::vec3 min = centerWorld - half;
+            glm::vec3 max = centerWorld + half;
+
+            ShapeRendering::Color4u color = aabbComp.collissionTriggered
+                ? ShapeRendering::Color4u{ 0xFFFF0000 } // Red if collided
+            : ShapeRendering::Color4u{ 0xFF00FF00 }; // Green if not
+
+            shapeRenderer->push_states(color);
+            shapeRenderer->push_AABB(min, max);
             shapeRenderer->pop_states<ShapeRendering::Color4u>();
         }
     }
