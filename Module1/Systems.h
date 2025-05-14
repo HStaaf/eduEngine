@@ -9,6 +9,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include "ShapeRenderer.hpp"
+#include <glm/gtx/quaternion.hpp>
+#include <iostream>
 
 extern std::vector<Sphere*> allSpheres;
 
@@ -89,7 +91,7 @@ inline void PlayerControllerSystem(entt::registry& registry, InputManagerPtr inp
             UpdateAnimState(anim, AnimState::Idle);
         }
 
-        if (input->IsKeyPressed(Key::Space)) {
+        if (input->IsKeyPressed(Key::Space) || input->IsKeyPressed(Key::F)) {
             anim.isGrounded = false;
             velocity.velocity.y = 5.0f;
             UpdateAnimState(anim, AnimState::Jumping);
@@ -109,6 +111,37 @@ inline void MovementSystem(entt::registry& registry, float deltaTime) {
         auto& anim  = view.get<AnimeComponent>(entity);
         tfm.position += vel.velocity * deltaTime;
         ApplyJumpPhysics(tfm, vel, anim, deltaTime);
+
+    }
+}
+
+inline void HorseFeedingSystem(entt::registry& registry, InputManagerPtr input, std::shared_ptr<PlayerLogic> playerLogic, float deltaTime, QuestState& myQuest) {
+    auto view = registry.view<TransformComponent, HorseComponent>();
+    auto playerview = registry.view<PlayerLogic>();
+
+    
+
+    for (auto entity : view) {
+        auto& tfm = view.get<TransformComponent>(entity);
+        auto& horse = view.get<HorseComponent>(entity);
+
+        if (input->IsKeyPressed(eeng::InputManager::Key::F) && playerLogic->CheckFood() > 0) {
+            horse.spinTimeRemaining = 3.0f;
+            playerLogic->FeedHorse();
+            myQuest = QuestState::QuestComplete;
+        }
+        else if (horse.spinTimeRemaining > 0.0f) {
+            float spinAmount = horse.spinSpeed * deltaTime;
+            glm::quat spinRot = glm::angleAxis(glm::radians(spinAmount), glm::vec3(0, 1, 0));
+            tfm.rotation = spinRot * tfm.rotation;
+
+            horse.spinTimeRemaining -= deltaTime;
+
+            if (horse.spinTimeRemaining <= 0.0f) {
+                horse.spinTimeRemaining = 0.0f;
+            }
+        }
+        else return;
     }
 }
 
@@ -375,9 +408,6 @@ inline void AABBPlaneCollisionSystem(entt::registry& registry) {
 }
 
 
-
-
-
 float DistanceBetweenSpheres(Sphere* leftSphere, Sphere* rightSphere) {
     float centerDistance = glm::distance(leftSphere->center, rightSphere->center);
     float surfaceDistance = centerDistance - (leftSphere->radius + rightSphere->radius);
@@ -632,7 +662,9 @@ std::vector<Sphere*> FindPossibleCollisions(SphereNode* treeRoot, Sphere* sphere
 inline void BVHCollisionSystem(
     entt::registry& registry,
     std::unordered_map<entt::entity, int>& collisionCandidateCounts,
-    std::shared_ptr<PlayerLogic> playerLogic)
+    std::shared_ptr<PlayerLogic> playerLogic,
+    entt::entity horseEntity,
+    QuestState& myQuest)
 {
     std::vector<std::unique_ptr<Sphere>> tempSpheres;
     allSpheres.clear();
@@ -691,22 +723,12 @@ inline void BVHCollisionSystem(
                 colA.sphereCollissionTriggered = true;
                 colB.sphereCollissionTriggered = true;
 
-
-                std::cout << "s: " << int(s->owner)
-                    << ", other: " << int(other->owner)
-                    << ", player: " << int(playerLogic->getEntity()) << "\n";
-
-                bool isSFood = registry.any_of<FoodComponent>(s->owner);
-                bool isOtherFood = registry.any_of<FoodComponent>(other->owner);
-
-                std::cout << "isSFood: " << isSFood << ", isOtherFood: " << isOtherFood << "\n";
-
-
                 if (registry.any_of<FoodComponent>(s->owner) && playerLogic && playerLogic->getEntity() == other->owner) {
                     auto& food = registry.get<FoodComponent>(s->owner);
                     if (!food.isCollected) {
                         playerLogic->CollectFood();
                         food.isCollected = true;
+                        myQuest = QuestState::FeedHorse;
                     }
                 }
                 else if (registry.any_of<FoodComponent>(other->owner) && playerLogic && playerLogic->getEntity() == s->owner) {
@@ -714,6 +736,7 @@ inline void BVHCollisionSystem(
                     if (!food.isCollected) {
                         playerLogic->CollectFood();
                         food.isCollected = true;
+                        myQuest = QuestState::FeedHorse;
                     }
                 }
 

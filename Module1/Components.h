@@ -26,6 +26,12 @@ struct AABBColliderComponent {
     }
 };
 
+struct HorseComponent {
+    bool isSpinning = false;
+    float spinTimeRemaining = 0.0f;
+    float spinSpeed = 180.0f;
+};
+
 struct FoodComponent {
     bool isCollected = false;
 

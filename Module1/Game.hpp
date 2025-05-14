@@ -11,6 +11,11 @@
 #include "CalorieTracker.cpp"
 #include "EventQueue.h"
 
+enum QuestState {
+    FindFood,
+    FeedHorse,
+    QuestComplete
+};
 
 /// @brief A Game may hold, update and render 3D geometry and GUI elements
 class Game : public eeng::GameBase
@@ -19,6 +24,8 @@ public:
     /// @brief For game resource initialization
     /// @return 
     bool init() override;
+
+    QuestState myQuest = QuestState::FindFood;
 
     /// @brief General update method that is called each frame
     /// @param time Total time elapsed in seconds
@@ -51,13 +58,14 @@ private:
     std::shared_ptr<PlayerLogic> playerLogic;
     std::shared_ptr<CalorieTracker> calorieTracker;
     EventQueue eventQueue;
+    entt::entity horseEntity = entt::entity{};
     //std::vector<Sphere*> allSpheres;
     // Renderer for rendering imported animated or non-animated models
     eeng::ForwardRendererPtr forwardRenderer;
     std::unordered_map<entt::entity, int> collisionCandidateCounts;
     // Immediate-mode renderer for basic 2D or 3D primitives
     ShapeRendererPtr shapeRenderer;
-
+    float feedingtime = 3;
     // Entity registry - to use in labs
     std::shared_ptr<entt::registry> entity_registry;
 

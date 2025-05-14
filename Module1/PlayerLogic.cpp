@@ -48,4 +48,8 @@ public:
 		std::cout << "Feeding horse .\n";
 
 	}
+
+    int CheckFood() {
+        return collectedFood;
+    }
 };

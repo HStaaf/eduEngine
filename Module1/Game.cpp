@@ -104,21 +104,51 @@ bool Game::init()
         0.0f, { 0, 1, 0 },
         { 100.0f, 100.0f, 100.0f });
 
-    horseWorldMatrix = glm_aux::TRS(
-        { 30.0f, 0.0f, -35.0f },
-        35.0f, { 0, 1, 0 },
-        { 0.01f, 0.01f, 0.01f });
-    #pragma endregion
+    //horseWorldMatrix = glm_aux::TRS(
+    //    { 30.0f, 0.0f, -35.0f },
+    //    35.0f, { 0, 1, 0 },
+    //    { 0.01f, 0.01f, 0.01f });
+    //#pragma endregion
+
+    horseEntity = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(
+        horseEntity,
+        glm::vec3{ 30.0f, 0.0f, -35.0f },
+        glm::vec3{ 0.0f, 0.0f, 0.0f },
+        glm::vec3{ 0.01f, 0.01f, 0.01f }
+    );
+
+    entity_registry->emplace<MeshComponent>(horseEntity, horseMesh);
+    entity_registry->emplace<HorseComponent>(horseEntity);
+
+    glm::vec3 horseBounds[] = {
+    glm::vec3(0.0f, 0.0f, 0.0f),
+    glm::vec3(0.0f, 2.2f, 0.0f)
+    };
+
+    int numPointsHorse = sizeof(horseBounds) / sizeof(glm::vec3);
+    Sphere boundingSphereHorse = BuildSphereFromPoints(horseBounds, numPointsHorse, horseEntity);
 
 
+    entity_registry->emplace<SphereColliderComponent>(
+        horseEntity,
+        boundingSphereHorse.center + glm::vec3(0.0f, 0.0f, 0.0f), 
+        boundingSphereHorse.radius,    
+        false,                     
+        false,					  
+        false
+    );
+    AABBBoundingBox aabbHorse = BuildAABBFromSphere(boundingSphereHorse);
+    glm::vec3 halfWidthsVecHorse(aabbHorse.halfWidths[0], aabbHorse.halfWidths[1], aabbHorse.halfWidths[2]);
+    entity_registry->emplace<AABBColliderComponent>(horseEntity, aabbHorse.center, halfWidthsVecHorse, true, false);
 
-
+    /////  PLAYER!!!!!!!!!!!!!!!!!!!!!!!!!
     playerEntity = entity_registry->create();
     entity_registry->emplace<TransformComponent>(
         playerEntity,
-        glm::vec3{ 0.0f, 0.0f, 0.0f },  // position
-        glm::vec3{ 0.0f, 0.0f, 0.0f },  // rotation (Euler angles or radians)
-        glm::vec3{ 0.03f, 0.03f, 0.03f }   // scale
+        glm::vec3{ 0.0f, 0.0f, 0.0f },  
+        glm::vec3{ 0.0f, 0.0f, 0.0f },  
+        glm::vec3{ 0.03f, 0.03f, 0.03f }
     );
     entity_registry->emplace<PlayerTag>(playerEntity);
     entity_registry->emplace<MeshComponent>(playerEntity, playerMesh);
@@ -262,30 +292,19 @@ void Game::update(
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
     //SphereCollisionSystem(*entity_registry);
-    BVHCollisionSystem(*entity_registry, collisionCandidateCounts, playerLogic);
+    BVHCollisionSystem(*entity_registry, collisionCandidateCounts, playerLogic,horseEntity, myQuest);
     SpherePlaneCollisionSystem(*entity_registry);
     AABBCollisionSystem(*entity_registry);
     AABBPlaneCollisionSystem(*entity_registry);
+    HorseFeedingSystem(*entity_registry, input, playerLogic, deltaTime, myQuest);
+
+
     //eventQueue.BroadcastAllEvents();
 
     pointlight.pos = glm::vec3(
         glm_aux::R(time * 0.1f, { 0.0f, 1.0f, 0.0f }) *
         glm::vec4(100.0f, 100.0f, 100.0f, 1.0f));
 
-    //characterWorldMatrix1 = glm_aux::TRS(
-    //    player.pos,
-    //    0.0f, { 0, 1, 0 },
-    //    { 0.03f, 0.03f, 0.03f });
-
-    //characterWorldMatrix2 = glm_aux::TRS(
-    //    { -10, 0, 0 },
-    //    time * glm::radians(150.0f), { 0, 1, 0 },
-    //    { 0.03f, 0.03f, 0.03f });
-
-    //characterWorldMatrix3 = glm_aux::TRS(
-    //    { 3, 0, 0 },
-    //    time * glm::radians(50.0f), { 0, 1, 0 },
-    //    { 0.03f, 0.03f, 0.03f });
 
     // Intersect player view ray with AABBs of other objects 
     glm_aux::intersect_ray_AABB(player.viewRay, character_aabb2.min, character_aabb2.max);
@@ -304,6 +323,12 @@ void Game::update(
             glm_aux::to_string(ray.origin).c_str(),
             glm_aux::to_string(ray.dir).c_str());
     }
+
+
+
+
+
+
 }
 
 void Game::render(
@@ -335,9 +360,9 @@ void Game::render(
     grass_aabb = grassMesh->m_model_aabb.post_transform(grassWorldMatrix);
 
     // Horse
-    horseMesh->animate(3, time);
-    forwardRenderer->renderMesh(horseMesh, horseWorldMatrix);
-    horse_aabb = horseMesh->m_model_aabb.post_transform(horseWorldMatrix);
+    //horseMesh->animate(3, time);
+    //forwardRenderer->renderMesh(horseMesh, horseWorldMatrix);
+    //horse_aabb = horseMesh->m_model_aabb.post_transform(horseWorldMatrix);
 
 
     // End rendering pass
@@ -442,7 +467,7 @@ void Game::render(
         shapeRenderer->push_basis_basic(characterWorldMatrix2, 1.0f);
         shapeRenderer->push_basis_basic(characterWorldMatrix3, 1.0f);
         shapeRenderer->push_basis_basic(grassWorldMatrix, 1.0f);
-        shapeRenderer->push_basis_basic(horseWorldMatrix, 1.0f);
+        //shapeRenderer->push_basis_basic(horseWorldMatrix, 1.0f);
     }
 
     // Draw AABBs
@@ -562,6 +587,19 @@ void Game::renderUI()
         if (collisionCandidateCounts.contains(playerEntity)) {
             ImGui::Text("Player BVH candidates: %d", collisionCandidateCounts[playerEntity]);
         }
+
+        switch (myQuest) {
+        case QuestState::FindFood:
+            ImGui::Text("Find food for the horse.");
+            break;
+        case QuestState::FeedHorse:
+            ImGui::Text("Walk To the horse and press [F] to feed him.");
+            break;
+        case QuestState::QuestComplete:
+            ImGui::Text("Quest complete!");
+            break;
+        }
+
     }
     else
     {
