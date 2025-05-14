@@ -54,7 +54,7 @@ private:
     //std::vector<Sphere*> allSpheres;
     // Renderer for rendering imported animated or non-animated models
     eeng::ForwardRendererPtr forwardRenderer;
-
+    std::unordered_map<entt::entity, int> collisionCandidateCounts;
     // Immediate-mode renderer for basic 2D or 3D primitives
     ShapeRendererPtr shapeRenderer;
 

@@ -141,9 +141,9 @@ bool Game::init()
 
     entity_registry->emplace<SphereColliderComponent>(
         playerEntity,
-        boundingSpherePlayer.center + glm::vec3(0.0f, 1.0f, 0.0f),    // Offset from entity position
+        boundingSpherePlayer.center + glm::vec3(0.0f, 0.0f, 0.0f),    // Offset from entity position
         boundingSpherePlayer.radius,    // Radius
-        true,                     // isTrigger
+        false,                     // isTrigger
 		false,					  // collissionTriggered
         false
     );
@@ -177,12 +177,15 @@ bool Game::init()
     Sphere boundingSphereNPC = BuildSphereFromPoints(playerBounds, numPoints, npcEntity);
     entity_registry->emplace<SphereColliderComponent>(
         npcEntity,
-        boundingSphereNPC.center + glm::vec3(0.0f, 0.1f, 0.0f),
+        boundingSphereNPC.center + glm::vec3(0.0f, 0.0f, 0.0f),
         boundingSphereNPC.radius,
-        true,
+        false,
         false,
         false);
 
+    AABBBoundingBox aabbNPC = BuildAABBFromSphere(boundingSphereNPC);
+    glm::vec3 halfWidthsNPC(aabbNPC.halfWidths[0], aabbNPC.halfWidths[1], aabbNPC.halfWidths[2]);
+    entity_registry->emplace<AABBColliderComponent>(npcEntity, aabbNPC.center, halfWidthsNPC, true, false);
 
     // Create ground entity with a plane collider at y = 0
     entt::entity groundEntity = entity_registry->create();
@@ -199,7 +202,7 @@ bool Game::init()
 
 
 
-    //Create food 
+    // FOOD Component
     entt::entity foodEntity = entity_registry->create();
     entity_registry->emplace<TransformComponent>(
         foodEntity,
@@ -211,9 +214,10 @@ bool Game::init()
 
     // Build AABB for the food
     glm::vec3 foodCenter = glm::vec3{ 3.0f, 0.5f, 0.0f };
-    float hw = 0.3f;
-    AABBBoundingBox foodAABB(foodCenter, hw, hw, hw);
+    float radius = 0.3f;
 
+    // Add AABB collider
+    AABBBoundingBox foodAABB(foodCenter, radius, radius, radius);
     entity_registry->emplace<AABBColliderComponent>(
         foodEntity,
         foodAABB.center,
@@ -222,6 +226,15 @@ bool Game::init()
         false
     );
 
+    // Add sphere collider as trigger so it enters BVH
+    entity_registry->emplace<SphereColliderComponent>(
+        foodEntity,
+        foodCenter, // Matches AABB center
+        radius,
+        true,       // Trigger! No physical push
+        false,
+        false
+    );
 
 
     eventQueue.RegisterListener([this](const std::string& e) {
@@ -248,12 +261,12 @@ void Game::update(
     NPCControllerSystem(*entity_registry);
     MovementSystem(*entity_registry, deltaTime);
     AnimateSystem(*entity_registry, deltaTime, time, characterAnimSpeed);
-    SphereCollisionSystem(*entity_registry);
-    //BVHCollisionSystem(*entity_registry);
+    //SphereCollisionSystem(*entity_registry);
+    BVHCollisionSystem(*entity_registry, collisionCandidateCounts, playerLogic);
     SpherePlaneCollisionSystem(*entity_registry);
     AABBCollisionSystem(*entity_registry);
     AABBPlaneCollisionSystem(*entity_registry);
-    eventQueue.BroadcastAllEvents();
+    //eventQueue.BroadcastAllEvents();
 
     pointlight.pos = glm::vec3(
         glm_aux::R(time * 0.1f, { 0.0f, 1.0f, 0.0f }) *
@@ -326,20 +339,6 @@ void Game::render(
     forwardRenderer->renderMesh(horseMesh, horseWorldMatrix);
     horse_aabb = horseMesh->m_model_aabb.post_transform(horseWorldMatrix);
 
-    //// Character, instance 1
-    //characterMesh->animate(2, time * characterAnimSpeed);
-    //forwardRenderer->renderMesh(characterMesh, characterWorldMatrix1);
-    //character_aabb1 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix1);
-
-    //// Character, instance 2
-    //characterMesh->animate(2, time * characterAnimSpeed);
-    //forwardRenderer->renderMesh(characterMesh, characterWorldMatrix2);
-    //character_aabb2 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix2);
-
-    // Character, instance 3
-    //characterMesh->animate(2, time * characterAnimSpeed);
-    //forwardRenderer->renderMesh(characterMesh, characterWorldMatrix3);
-    //character_aabb3 = characterMesh->m_model_aabb.post_transform(characterWorldMatrix3);
 
     // End rendering pass
     drawcallCount = forwardRenderer->endPass();
@@ -348,6 +347,16 @@ void Game::render(
     {
         auto view = entity_registry->view<TransformComponent, SphereColliderComponent>();
         for (auto entity : view) {
+
+            // Skip collected food
+            if (entity_registry->any_of<FoodComponent>(entity)) {
+                const auto& food = entity_registry->get<FoodComponent>(entity);
+                if (food.isCollected) {
+                    std::cout << "Skipping rendering of food AABB for entity: " << int(entity) << "\n";
+                    continue;
+                }
+            }
+
             const auto& transform = view.get<TransformComponent>(entity);
             const auto& collider = view.get<SphereColliderComponent>(entity);
 
@@ -384,6 +393,16 @@ void Game::render(
     {
         auto view = entity_registry->view<TransformComponent, AABBColliderComponent>();
         for (auto entity : view) {
+
+            // Skip collected food
+            if (entity_registry->any_of<FoodComponent>(entity)) {
+                const auto& food = entity_registry->get<FoodComponent>(entity);
+                if (food.isCollected) {
+                    std::cout << "Skipping rendering of food AABB for entity: " << int(entity) << "\n";
+                    continue;
+                }
+            }
+
             const auto& transform = view.get<TransformComponent>(entity);
             const auto& aabbComp = view.get<AABBColliderComponent>(entity);
             const auto& aabb = aabbComp.aabb;
@@ -538,6 +557,10 @@ void Game::renderUI()
 
         if (calorieTracker) {
             ImGui::Text("Calories burned: %.2f kcal", calorieTracker->getCalories());
+        }
+
+        if (collisionCandidateCounts.contains(playerEntity)) {
+            ImGui::Text("Player BVH candidates: %d", collisionCandidateCounts[playerEntity]);
         }
     }
     else

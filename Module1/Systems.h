@@ -507,10 +507,141 @@ std::vector<Sphere*> FindPossibleCollisions(SphereNode* treeRoot, Sphere* sphere
 }
 
 
-inline void BVHCollisionSystem(entt::registry& registry) {
-    allSpheres.clear();
+//inline void BVHCollisionSystem(
+//    entt::registry& registry,
+//    std::unordered_map<entt::entity, int>& collisionCandidateCounts,
+//    std::shared_ptr<PlayerLogic> playerLogic) {
+//    std::vector<std::unique_ptr<Sphere>> tempSpheres; 
+//    allSpheres.clear();
+//    collisionCandidateCounts.clear();
+//
+//    auto aabbView = registry.view<AABBColliderComponent>();
+//    for (auto entity : aabbView) {
+//        registry.get<AABBColliderComponent>(entity).collissionTriggered = false;
+//    }
+//
+//    auto view = registry.view<TransformComponent, SphereColliderComponent>();
+//    for (auto entity : view) {
+//        auto& tfm = registry.get<TransformComponent>(entity);
+//        auto& col = registry.get<SphereColliderComponent>(entity);
+//
+//        glm::vec3 worldCenter = tfm.position + col.localSphere.center;
+//        float worldRadius = col.localSphere.radius;
+//
+//        // Create world-space sphere, store it in temp vector for cleanup
+//        auto sphere = std::make_unique<Sphere>(Sphere{ worldCenter, worldRadius, entity });
+//        allSpheres.push_back(sphere.get());
+//        tempSpheres.push_back(std::move(sphere));
+//
+//        col.sphereCollissionTriggered = false;
+//    }
+//
+//    if (allSpheres.empty()) {
+//        return;
+//    }
+//
+//    //std::cout << "[BVH] Total spheres collected: " << allSpheres.size() << std::endl;
+//
+//    // Build BVH
+//    SphereNode* root = BuildBVHBottomUp(allSpheres, 3.0f);
+//
+//    // Query each sphere against the BVH
+//    for (Sphere* s : allSpheres) {
+//        std::vector<Sphere*> candidates = FindPossibleCollisions(root, s);
+//        collisionCandidateCounts[s->owner] = static_cast<int>(candidates.size()) - 1;
+//
+//        for (Sphere* other : candidates) {
+//            if (s == other) continue;
+//
+//            // === Broad Phase: Sphere-Sphere test ===
+//            if (!SphereSphereIntersection(s->center, s->radius, other->center, other->radius))
+//                continue;
+//
+//            // === Narrow Phase: AABB-AABB test ===
+//            if (registry.any_of<AABBColliderComponent>(s->owner) &&
+//                registry.any_of<AABBColliderComponent>(other->owner)) {
+//                auto& tfmA = registry.get<TransformComponent>(s->owner);
+//                auto& tfmB = registry.get<TransformComponent>(other->owner);
+//
+//                AABBBoundingBox aabbA = registry.get<AABBColliderComponent>(s->owner).aabb;
+//                AABBBoundingBox aabbB = registry.get<AABBColliderComponent>(other->owner).aabb;
+//
+//                aabbA.center += tfmA.position;
+//                aabbB.center += tfmB.position;
+//
+//                if (TestAABBAABB(aabbA, aabbB)) {
+//
+//
+//                    auto& colA = registry.get<SphereColliderComponent>(s->owner);
+//                    auto& colB = registry.get<SphereColliderComponent>(other->owner);
+//
+//                    // === Skip if both are triggers ===
+//                    if (colA.isTrigger && colB.isTrigger)
+//                        continue;
+//
+//                    // === Mark both as triggered (for visualization)
+//                    registry.get<AABBColliderComponent>(s->owner).collissionTriggered = true;
+//                    registry.get<AABBColliderComponent>(other->owner).collissionTriggered = true;
+//                    colA.sphereCollissionTriggered = true;
+//                    colB.sphereCollissionTriggered = true;
+//
+//                    // === Observer notification (only from the trigger) ===
+//                    if (colA.isTrigger && !colB.isTrigger) {
+//                        if (auto logic = registry.try_get<PlayerLogic>(s->owner)) {
+//                            logic->OnCollision({ s->owner, other->owner });
+//                        }
+//                    }
+//                    else if (colB.isTrigger && !colA.isTrigger) {
+//                        if (auto logic = registry.try_get<PlayerLogic>(other->owner)) {
+//                            logic->OnCollision({ other->owner, s->owner });
+//                        }
+//                    }
+//
+//                    if (!colA.isTrigger && !colB.isTrigger) {
+//                        glm::vec3 posA = tfmA.position + colA.localSphere.center;
+//                        glm::vec3 posB = tfmB.position + colB.localSphere.center;
+//                        glm::vec3 delta = posB - posA;
+//                        delta.y = 0.0f;
+//
+//                        float dist = glm::length(delta);
+//                        float rA = colA.localSphere.radius;
+//                        float rB = colB.localSphere.radius;
+//                        float minDist = rA + rB;
+//
+//                        if (dist > 0.0001f && dist < minDist) {
+//                            glm::vec3 normal = delta / dist;
+//                            float penetration = minDist - dist;
+//                            glm::vec3 correction = normal * (penetration * 0.5f);
+//
+//                            tfmA.position -= correction;
+//                            tfmB.position += correction;
+//                        }
+//
+//                    }
+//
+//
+//                }
+//
+//
+//            }
+//        }
+//    }
+//}
 
-    // Collect all sphere colliders
+
+inline void BVHCollisionSystem(
+    entt::registry& registry,
+    std::unordered_map<entt::entity, int>& collisionCandidateCounts,
+    std::shared_ptr<PlayerLogic> playerLogic)
+{
+    std::vector<std::unique_ptr<Sphere>> tempSpheres;
+    allSpheres.clear();
+    collisionCandidateCounts.clear();
+
+    for (auto entity : registry.view<AABBColliderComponent>()) {
+        registry.get<AABBColliderComponent>(entity).collissionTriggered = false;
+    }
+
     auto view = registry.view<TransformComponent, SphereColliderComponent>();
     for (auto entity : view) {
         auto& tfm = registry.get<TransformComponent>(entity);
@@ -519,40 +650,109 @@ inline void BVHCollisionSystem(entt::registry& registry) {
         glm::vec3 worldCenter = tfm.position + col.localSphere.center;
         float worldRadius = col.localSphere.radius;
 
-        // Create world-space version
-        col.localSphere.center = worldCenter;
-        col.localSphere.owner = entity;
+        auto sphere = std::make_unique<Sphere>(Sphere{ worldCenter, worldRadius, entity });
+        allSpheres.push_back(sphere.get());
+        tempSpheres.push_back(std::move(sphere));
 
-        allSpheres.push_back(&col.localSphere);
-
-        // Reset flags
         col.sphereCollissionTriggered = false;
     }
 
-    if (allSpheres.empty())
-        return;
+    if (allSpheres.empty()) return;
 
-    // Build BVH
     SphereNode* root = BuildBVHBottomUp(allSpheres, 3.0f);
 
-    // Query each sphere against the BVH
     for (Sphere* s : allSpheres) {
         std::vector<Sphere*> candidates = FindPossibleCollisions(root, s);
+        collisionCandidateCounts[s->owner] = static_cast<int>(candidates.size()) - 1;
 
         for (Sphere* other : candidates) {
             if (s == other) continue;
-            if (SphereSphereIntersection(s->center, s->radius, other->center, other->radius)) {
-                auto& a = registry.get<SphereColliderComponent>(s->owner);
-                auto& b = registry.get<SphereColliderComponent>(other->owner);
-                a.sphereCollissionTriggered = true;
-                b.sphereCollissionTriggered = true;
+            if (!SphereSphereIntersection(s->center, s->radius, other->center, other->radius)) continue;
+
+            if (!registry.all_of<AABBColliderComponent>(s->owner) ||
+                !registry.all_of<AABBColliderComponent>(other->owner))
+                continue;
+
+            auto& tfmA = registry.get<TransformComponent>(s->owner);
+            auto& tfmB = registry.get<TransformComponent>(other->owner);
+            auto& colA = registry.get<SphereColliderComponent>(s->owner);
+            auto& colB = registry.get<SphereColliderComponent>(other->owner);
+
+            auto aabbA = registry.get<AABBColliderComponent>(s->owner).aabb;
+            auto aabbB = registry.get<AABBColliderComponent>(other->owner).aabb;
+
+            aabbA.center += tfmA.position;
+            aabbB.center += tfmB.position;
+
+            if (TestAABBAABB(aabbA, aabbB)) {
+
+                registry.get<AABBColliderComponent>(s->owner).collissionTriggered = true;
+                registry.get<AABBColliderComponent>(other->owner).collissionTriggered = true;
+                colA.sphereCollissionTriggered = true;
+                colB.sphereCollissionTriggered = true;
+
+
+                std::cout << "s: " << int(s->owner)
+                    << ", other: " << int(other->owner)
+                    << ", player: " << int(playerLogic->getEntity()) << "\n";
+
+                bool isSFood = registry.any_of<FoodComponent>(s->owner);
+                bool isOtherFood = registry.any_of<FoodComponent>(other->owner);
+
+                std::cout << "isSFood: " << isSFood << ", isOtherFood: " << isOtherFood << "\n";
+
+
+                if (registry.any_of<FoodComponent>(s->owner) && playerLogic && playerLogic->getEntity() == other->owner) {
+                    auto& food = registry.get<FoodComponent>(s->owner);
+                    if (!food.isCollected) {
+                        playerLogic->CollectFood();
+                        food.isCollected = true;
+                    }
+                }
+                else if (registry.any_of<FoodComponent>(other->owner) && playerLogic && playerLogic->getEntity() == s->owner) {
+                    auto& food = registry.get<FoodComponent>(other->owner);
+                    if (!food.isCollected) {
+                        playerLogic->CollectFood();
+                        food.isCollected = true;
+                    }
+                }
+
+                //// Notify only from the trigger
+                //if (colA.isTrigger && !colB.isTrigger && playerLogic->getEntity() == s->owner) {
+                //    std::cout << "Trigger A fired PlayerLogic\n";
+                //    playerLogic->OnCollision({ s->owner, other->owner });
+                //}
+                //else if (colB.isTrigger && !colA.isTrigger && playerLogic->getEntity() == other->owner) {
+                //    std::cout << "Trigger B fired PlayerLogic\n";
+                //    playerLogic->OnCollision({ other->owner, s->owner });
+                //}
+
+                // Only resolve physics if both are not triggers
+                if (!colA.isTrigger && !colB.isTrigger) {
+                    std::cout << "Resolving collision physically\n";
+                    glm::vec3 posA = tfmA.position + colA.localSphere.center;
+                    glm::vec3 posB = tfmB.position + colB.localSphere.center;
+                    glm::vec3 delta = posB - posA;
+                    delta.y = 0.0f;
+
+                    float dist = glm::length(delta);
+                    float minDist = colA.localSphere.radius + colB.localSphere.radius;
+
+                    if (dist > 0.0001f && dist < minDist) {
+                        glm::vec3 normal = delta / dist;
+                        glm::vec3 correction = normal * (minDist - dist) * 0.5f;
+
+                        tfmA.position -= correction;
+                        tfmB.position += correction;
+                    }
+                }
+                else {
+                    std::cout << "No physical resolution due to trigger involvement\n";
+                }
             }
         }
     }
 }
-
-
-
 
 
 

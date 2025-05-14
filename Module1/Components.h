@@ -13,8 +13,9 @@
 
 struct AABBColliderComponent {
     AABBBoundingBox aabb;
-    bool collissionTriggered = false; 
     bool isTrigger = false;
+    bool collissionTriggered = false; 
+
 
     AABBColliderComponent() = default;
 

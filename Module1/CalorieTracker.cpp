@@ -12,11 +12,11 @@ public:
         switch (event) {
         case Event::EVENT_PLAYER_JUMPED:
             totalCalories += 0.2f;
-            std::cout << "Jumped! +0.2 kcal (Total: " << totalCalories << " kcal)\n";
+            //std::cout << "Jumped! +0.2 kcal (Total: " << totalCalories << " kcal)\n";
             break;
         case Event::EVENT_PLAYER_WALKED:
             totalCalories += 0.05f;
-            std::cout << "Walked! +0.05 kcal (Total: " << totalCalories << " kcal)\n";
+            //std::cout << "Walked! +0.05 kcal (Total: " << totalCalories << " kcal)\n";
             break;
         default:
             break;
